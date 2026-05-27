@@ -407,7 +407,7 @@ class ScreenshotProcessor(BaseContextProcessor):
                     extracted_data=ExtractedData(
                         title=data.get("title", ""),
                         summary=data.get("summary", ""),
-                        keywords=sorted(set(data.get("keywords", []))),
+                        keywords=data.get("keywords", []),
                         entities=[],  # Will be populated below
                         context_type=context_type,
                         importance=self._safe_int(data.get("importance")),
@@ -550,11 +550,10 @@ class ScreenshotProcessor(BaseContextProcessor):
 
         # Entity extraction moved to merge phase
         entities = []
-        raw_keywords = analysis.get("keywords", [])
         extracted_data = ExtractedData(
             title=analysis.get("title", ""),
             summary=analysis.get("summary", ""),
-            keywords=sorted(list(set(raw_keywords))),
+            keywords=analysis.get("keywords", []),
             entities=entities,
             context_type=context_type,
             importance=self._safe_int(analysis.get("importance"), 0),
