@@ -15,9 +15,10 @@ from loguru import logger
 
 
 class PromptManager:
-    def __init__(self, prompt_config_path: str = None):
+    def __init__(self, prompt_config_path: str = None, user_prompts_dir: str = None):
         self.prompts = {}
         self.prompt_config_path = prompt_config_path
+        self.user_prompts_dir = user_prompts_dir
         if prompt_config_path and os.path.exists(prompt_config_path):
             with open(prompt_config_path, "r", encoding="utf-8") as f:
                 self.prompts = yaml.safe_load(f)
@@ -68,7 +69,7 @@ class PromptManager:
         base_name = os.path.basename(self.prompt_config_path)
         if "_" in base_name:
             lang = base_name.split("_")[1].split(".")[0]
-            dir_name = os.path.dirname(self.prompt_config_path)
+            dir_name = self.user_prompts_dir or os.path.dirname(self.prompt_config_path)
             return os.path.join(dir_name, f"user_prompts_{lang}.yaml")
         return None
 
