@@ -17,12 +17,23 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
 
-import pandas as pd
-
 from opencontext.models.context import Chunk, RawContextProperties
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+def _load_pandas():
+    try:
+        import pandas as pd
+
+        return pd
+    except Exception as e:
+        raise RuntimeError(
+            "Structured CSV/XLSX chunking requires pandas and numpy. "
+            "Install compatible wheels for your Python and CPU architecture before processing "
+            "spreadsheet documents."
+        ) from e
 
 
 class ChunkingConfig:
@@ -199,6 +210,7 @@ class StructuredFileChunker(BaseChunker):
     ) -> Iterator[Chunk]:
         """Stream CSV file in chunks"""
         try:
+            pd = _load_pandas()
             chunk_size = self.config.batch_size
             chunk_idx = 0
 
@@ -239,6 +251,7 @@ class StructuredFileChunker(BaseChunker):
     ) -> Iterator[Chunk]:
         """Stream Excel file in chunks"""
         try:
+            pd = _load_pandas()
             # Read all sheets
             excel_file = pd.ExcelFile(file_path)
             chunk_idx = 0
@@ -373,6 +386,7 @@ class FAQChunker(BaseChunker):
             return
 
         try:
+            pd = _load_pandas()
             # Read Excel file
             df = pd.read_excel(file_path)
 
