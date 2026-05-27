@@ -9,8 +9,30 @@ OpenContext module: image
 
 from typing import Optional
 
-import imagehash
 from PIL import Image
+
+
+def _difference_hash(image: Image.Image, hash_size: int = 8) -> str:
+    """
+    Calculate a dHash compatible fixed-width hex string without external numeric deps.
+    """
+    grayscale = image.convert("L")
+    resized = grayscale.resize((hash_size + 1, hash_size), Image.Resampling.LANCZOS)
+    if hasattr(resized, "get_flattened_data"):
+        pixels = list(resized.get_flattened_data())
+    else:
+        pixels = list(resized.getdata())
+
+    value = 0
+    for row in range(hash_size):
+        row_offset = row * (hash_size + 1)
+        for col in range(hash_size):
+            left = pixels[row_offset + col]
+            right = pixels[row_offset + col + 1]
+            value = (value << 1) | int(left > right)
+
+    width = (hash_size * hash_size + 3) // 4
+    return f"{value:0{width}x}"
 
 
 def calculate_bytes2phash(image_bytes: bytes) -> Optional[str]:
@@ -22,7 +44,7 @@ def calculate_bytes2phash(image_bytes: bytes) -> Optional[str]:
         import io
 
         with Image.open(io.BytesIO(image_bytes)) as image:
-            return str(imagehash.dhash(image, hash_size=8))
+            return _difference_hash(image, hash_size=8)
     except Exception:
         return None
 
@@ -33,7 +55,7 @@ def calculate_phash(path: str) -> Optional[str]:
     """
     try:
         with Image.open(path) as image:
-            return str(imagehash.dhash(image, hash_size=8))
+            return _difference_hash(image, hash_size=8)
     except Exception:
         return None
 

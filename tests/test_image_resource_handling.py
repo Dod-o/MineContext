@@ -5,6 +5,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from opencontext.utils.image import calculate_phash
+
 
 def load_document_converter_class():
     repo_root = Path(__file__).resolve().parents[1]
@@ -19,6 +21,15 @@ DocumentConverter = load_document_converter_class()
 
 
 class ImageResourceHandlingTest(unittest.TestCase):
+    def test_phash_releases_image_file_handle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_path = Path(tmp) / "screen.png"
+            Image.new("RGB", (8, 8), "red").save(image_path)
+
+            self.assertEqual(calculate_phash(str(image_path)), "0000000000000000")
+            image_path.unlink()
+            self.assertFalse(image_path.exists())
+
     def test_loaded_image_is_independent_from_source_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             image_path = Path(tmp) / "document.png"
