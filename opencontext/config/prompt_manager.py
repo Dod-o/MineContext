@@ -15,6 +15,12 @@ from loguru import logger
 
 
 class PromptManager:
+    PROMPT_ALIASES = {
+        "processing.extraction.screenshot_analyze": (
+            "processing.extraction.screenshot_contextual_batch"
+        )
+    }
+
     def __init__(self, prompt_config_path: str = None, user_prompts_dir: str = None):
         self.prompts = {}
         self.prompt_config_path = prompt_config_path
@@ -44,6 +50,10 @@ class PromptManager:
             if isinstance(value, dict) and key in value:
                 value = value[key]
             else:
+                alias = self.PROMPT_ALIASES.get(name)
+                if alias:
+                    logger.warning(f"Prompt group '{name}' not found, trying alias '{alias}'.")
+                    return self.get_prompt_group(alias)
                 logger.warning(f"Prompt group '{name}' not found.")
                 return {}
         return value if isinstance(value, dict) else {}

@@ -31,6 +31,29 @@ class PromptManagerTest(unittest.TestCase):
             saved_prompts = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
             self.assertEqual(saved_prompts["generation"]["demo"], "custom")
 
+    def test_screenshot_analyze_prompt_falls_back_to_legacy_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompts_path = root / "prompts_en.yaml"
+            prompts_path.write_text(
+                "\n".join(
+                    [
+                        "processing:",
+                        "  extraction:",
+                        "    screenshot_contextual_batch:",
+                        "      system: legacy system",
+                        "      user: legacy user",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            prompt_manager = PromptManager(str(prompts_path))
+
+            prompts = prompt_manager.get_prompt_group("processing.extraction.screenshot_analyze")
+            self.assertEqual(prompts["system"], "legacy system")
+            self.assertEqual(prompts["user"], "legacy user")
+
 
 if __name__ == "__main__":
     unittest.main()
