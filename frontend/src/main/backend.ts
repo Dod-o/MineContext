@@ -84,7 +84,36 @@ async function findAvailablePort(startPort: number = 1733, maxAttempts: number =
     }
   }
 
-  throw new Error(`Could not find available port after ${maxAttempts} attempts starting from ${startPort}`)
+  logToBackendFile(
+    `Could not find a preferred port after ${maxAttempts} attempts starting from ${startPort}; asking the OS for an available loopback port`
+  )
+  return findOsAssignedPort()
+}
+
+function findOsAssignedPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer()
+
+    server.once('error', (err: any) => {
+      reject(new Error(`Could not get an OS-assigned loopback port: ${err.code} - ${err.message}`))
+    })
+
+    server.once('listening', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Could not read OS-assigned loopback port')))
+        return
+      }
+
+      const port = address.port
+      server.close(() => {
+        logToBackendFile(`Using OS-assigned backend port: ${port}`)
+        resolve(port)
+      })
+    })
+
+    server.listen(0, '127.0.0.1')
+  })
 }
 
 // The backend service supports health checks
