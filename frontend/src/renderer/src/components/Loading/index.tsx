@@ -7,6 +7,8 @@ const { Title, Text } = Typography
 import logo from '/src/assets/images/logo.png'
 
 export type BackendStatus = 'starting' | 'running' | 'stopped' | 'error'
+const STARTING_PROGRESS_DURATION_MS = 8000
+const PROGRESS_TICK_MS = 100
 
 const LoadingComponent = ({ backendStatus }: { backendStatus: BackendStatus }) => {
   const [progress, setProgress] = useState(0)
@@ -29,31 +31,27 @@ const LoadingComponent = ({ backendStatus }: { backendStatus: BackendStatus }) =
   }
 
   useEffect(() => {
-    if (backendStatus === 'starting' && startTime === null) {
-      setStartTime(Date.now())
+    if (backendStatus === 'running') {
+      setProgress(100)
+      return
     }
 
-    const targetProgress = getProgressByStatus(backendStatus)
+    if (backendStatus !== 'starting') {
+      setProgress(getProgressByStatus(backendStatus))
+      return
+    }
+
+    const startedAt = startTime ?? Date.now()
+    if (startTime === null) {
+      setStartTime(startedAt)
+    }
 
     const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (backendStatus === 'starting') {
-          // Advance based on time, up to 99% within 20s
-          const elapsedTime = startTime ? Date.now() - startTime : 0
-          const timeProgress = Math.min(elapsedTime / 20000, 1) // 0 ~ 1
-          const dynamicTarget = Math.min(10 + timeProgress * 89, 99) // Smoothly from 10 to 99
-
-          return prev < dynamicTarget ? prev + 1 : prev
-        }
-
-        if (backendStatus === 'running') {
-          // Push directly to 100 in running state
-          return prev < 100 ? prev + 1 : 100
-        }
-
-        return targetProgress
-      })
-    }, 200)
+      const elapsedTime = Date.now() - startedAt
+      const timeProgress = Math.min(elapsedTime / STARTING_PROGRESS_DURATION_MS, 1)
+      const dynamicTarget = Math.min(10 + timeProgress * 89, 99)
+      setProgress((prev) => Math.max(prev, dynamicTarget))
+    }, PROGRESS_TICK_MS)
 
     return () => clearInterval(interval)
   }, [backendStatus, startTime])
