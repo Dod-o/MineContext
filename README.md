@@ -127,6 +127,28 @@ We currently support services from Doubao, OpenAI, and custom models. This inclu
 
 We recommend using [LMStudio](https://lmstudio.ai/) to run local models. It provides a simple interface and powerful features to help you quickly deploy and manage them.
 
+### Using LM Studio or Ollama
+
+MineContext sends screenshots to the vision language model, so a local text-only chat model is not enough. Before selecting a local model, make sure the served model can accept image input through an OpenAI-compatible chat API. Embeddings can use a separate local or cloud embedding model.
+
+In **Settings -> Model platform**, select **Custom** and use values like these:
+
+| Field | LM Studio | Ollama |
+| --- | --- | --- |
+| Vision language model | The loaded vision model ID shown by LM Studio | The pulled vision model name |
+| Base URL | `http://127.0.0.1:1234/v1` | `http://127.0.0.1:11434/v1` |
+| API Key | Leave empty unless your local server requires one | Leave empty or use any placeholder accepted by your setup |
+| Embedding provider | `OpenAI compatible` if served locally, otherwise Doubao/OpenAI/Aliyun | `OpenAI compatible` if served locally, otherwise Doubao/OpenAI/Aliyun |
+| Embedding base URL | The server exposing `/v1/embeddings` | `http://127.0.0.1:11434/v1` if using Ollama embeddings |
+| Embedding model | The local embedding model ID | The pulled embedding model name |
+
+Local model checklist:
+
+1. Start the local server before launching MineContext or before saving the model settings.
+2. Use a vision-capable model for screenshot understanding. If LM Studio reports `Vision add-on is not loaded, but images were provided for processing`, switch to a model/runtime that supports image input and restart the local server.
+3. Use an embedding model that supports OpenAI-compatible embeddings. If your local runtime only serves chat/VLM requests, keep embeddings on Doubao, OpenAI, Aliyun, or another compatible embedding service.
+4. Keep the `/v1` suffix in the base URL. MineContext normalizes common custom endpoints, but using the OpenAI-compatible root avoids provider-specific routing problems.
+
 **Considering both cost and performance, we recommend using the Doubao model.** The Doubao API Key can be generated in the [API Management Interface](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey).
 
 After obtaining the Doubao API Key, you need to activate two models in the [Model Activation Management Interface](https://console.volcengine.com/ark/region:ark+cn-beijing/model): the Visual Language Model and the Embedding Model.
