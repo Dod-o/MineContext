@@ -68,6 +68,15 @@ class ApiFeedbackStaticTest(unittest.TestCase):
         self.assertIn("validateModelSettingsAPI", settings_service)
         self.assertIn("return get(res, 'data.message')", settings_service)
 
+    def test_screen_recording_checks_model_api_before_starting(self):
+        page = SCREEN_MONITOR_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("const apiCheck = await checkApiConnection()", page)
+        self.assertIn("if (!apiCheck.ok)", page)
+        self.assertIn("Message.error(apiCheck.message", page)
+        self.assertIn("Model API is unavailable. Check Settings before recording.", page)
+        self.assertIn("await window.screenMonitorAPI.startTask()", page)
+
 
 if __name__ == "__main__":
     unittest.main()
