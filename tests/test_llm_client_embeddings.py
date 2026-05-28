@@ -163,6 +163,22 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertEqual(FakeOpenAI.last_base_url, "https://api.example.com/v1")
 
+    def test_custom_chat_base_url_preserves_non_empty_custom_path(self):
+        self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://ai.example.com/ai/llm/online/vision",
+                "api_key": "test-key",
+                "model": "multimodal-large",
+                "provider": "custom",
+            },
+        )
+
+        self.assertEqual(
+            FakeOpenAI.last_base_url,
+            "https://ai.example.com/ai/llm/online/vision",
+        )
+
     def test_aliyun_embedding_uses_dashscope_http_api(self):
         client = self.llm_client.LLMClient(
             llm_type=self.llm_client.LLMType.EMBEDDING,
