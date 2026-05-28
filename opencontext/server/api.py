@@ -29,7 +29,8 @@ from .routes import (
     vaults,
     web,
     conversation,
-    messages
+    messages,
+    sync,
 )
 
 logger = get_logger(__name__)
@@ -55,3 +56,4 @@ router.include_router(settings.router)
 router.include_router(conversation.router)  # 新增：会话路由
 router.include_router(messages.router)  # 新增：消息路由
 router.include_router(documents.router)  # 新增：文档上传路由
+router.include_router(sync.router)  # 新增：多设备同步路由
