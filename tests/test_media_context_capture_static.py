@@ -14,7 +14,7 @@ class MediaContextCaptureStaticTest(unittest.TestCase):
 
         self.assertIn('@router.post("/api/media_context/capture")', route)
         self.assertIn('media_type: str = Field(pattern="^(audio|video)$")', route)
-        self.assertIn("Media context must include a summary or transcript", route)
+        self.assertIn("Media context must include a summary, transcript, or media file path", route)
         self.assertIn("ContextSource.INPUT", route)
         self.assertIn("ContentFormat.TEXT", route)
         self.assertIn("opencontext.add_context(raw_context)", route)

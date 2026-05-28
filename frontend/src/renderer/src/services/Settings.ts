@@ -66,6 +66,17 @@ export interface GeneralSettingsProps {
   content_generation?: ContentGenerationConfigProps
 }
 
+export interface UploadMediaContextParams {
+  mediaType: 'audio' | 'video'
+  file: File | Blob
+  filename: string
+  title?: string
+  summary?: string
+  transcript?: string
+  startedAt?: string
+  endedAt?: string
+}
+
 // Complete API response structure
 export interface ApiResponse<T> {
   code: number
@@ -164,4 +175,18 @@ export const getGeneralSettingsAPI = async (): Promise<GeneralSettingsProps> => 
 
 export const updateGeneralSettingsAPI = async (settings: Partial<GeneralSettingsProps>): Promise<void> => {
   await axiosInstance.post('/api/settings/general', settings)
+}
+
+export const uploadMediaContextAPI = async (params: UploadMediaContextParams): Promise<string | undefined> => {
+  const formData = new FormData()
+  formData.append('media_type', params.mediaType)
+  formData.append('file', params.file, params.filename)
+  if (params.title) formData.append('title', params.title)
+  if (params.summary) formData.append('summary', params.summary)
+  if (params.transcript) formData.append('transcript', params.transcript)
+  if (params.startedAt) formData.append('started_at', params.startedAt)
+  if (params.endedAt) formData.append('ended_at', params.endedAt)
+
+  const res = await axiosInstance.post('/api/media_context/upload', formData)
+  return get(res, 'data.data.file_path')
 }

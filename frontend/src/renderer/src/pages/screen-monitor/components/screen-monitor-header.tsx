@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button, Space, Typography, Popover, Tag, Tooltip } from '@arco-design/web-react'
-import { IconCamera, IconPlayArrow, IconSettings, IconRecordStop } from '@arco-design/web-react/icon'
+import { IconCamera, IconPlayArrow, IconSettings, IconRecordStop, IconVoice } from '@arco-design/web-react/icon'
 
 const { Title } = Typography
 
@@ -16,6 +16,10 @@ interface ScreenMonitorHeaderProps {
   onCheckApiConnection: () => void
   onCaptureNow: () => void
   captureNowLoading: boolean
+  audioRecording: boolean
+  audioSaving: boolean
+  onStartAudioRecording: () => void
+  onStopAudioRecording: () => void
   onStartMonitoring: () => void
   onStopMonitoring: () => void
   onRequestPermission: () => void
@@ -33,6 +37,10 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
   onCheckApiConnection,
   onCaptureNow,
   captureNowLoading,
+  audioRecording,
+  audioSaving,
+  onStartAudioRecording,
+  onStopAudioRecording,
   onStartMonitoring,
   onStopMonitoring
 }) => {
@@ -98,6 +106,23 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
                 onClick={onCaptureNow}
                 className="[&_.arco-btn]: !bg-white [&_.arco-btn]: !border-gray-300 [&_.arco-btn]: !text-black [&_.arco-btn:hover]: !bg-gray-50">
                 Capture Now
+              </Button>
+            </Tooltip>
+            <Tooltip content={audioRecording ? 'Stop microphone recording and save it as context.' : 'Record meeting audio from the microphone.'}>
+              <Button
+                type={audioRecording ? 'primary' : 'outline'}
+                status={audioRecording ? 'danger' : undefined}
+                icon={audioRecording ? <IconRecordStop /> : <IconVoice />}
+                size="large"
+                loading={audioSaving}
+                disabled={!isToday || audioSaving}
+                onClick={audioRecording ? onStopAudioRecording : onStartAudioRecording}
+                className={
+                  audioRecording
+                    ? '[&_.arco-btn-primary]: !bg-red-500 [&_.arco-btn-primary:hover]: !bg-red-600'
+                    : '[&_.arco-btn]: !bg-white [&_.arco-btn]: !border-gray-300 [&_.arco-btn]: !text-black [&_.arco-btn:hover]: !bg-gray-50'
+                }>
+                {audioRecording ? 'Stop Audio' : 'Record Audio'}
               </Button>
             </Tooltip>
             {!isMonitoring ? (

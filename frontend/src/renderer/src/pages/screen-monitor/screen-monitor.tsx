@@ -26,11 +26,24 @@ import { getLogger } from '@shared/logger/renderer'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { RecordingStats } from './components/recording-stats-card'
 import { CaptureSource } from '@interface/common/source'
-import { getModelInfo, validateModelSettingsAPI } from '@renderer/services/Settings'
+import { getModelInfo, uploadMediaContextAPI, validateModelSettingsAPI } from '@renderer/services/Settings'
 import { normalizeScreenSettings, type CaptureTargetMode, type ScreenSettings } from '@renderer/store/setting'
 
 const logger = getLogger('ScreenMonitor')
 type ApiConnectionStatus = 'unknown' | 'checking' | 'connected' | 'error'
+
+function getSupportedRecordingMimeType(candidates: string[]) {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return ''
+  }
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) || ''
+}
+
+function getRecordingExtension(mimeType: string, fallback: string) {
+  if (mimeType.includes('mp4')) return 'mp4'
+  if (mimeType.includes('ogg')) return 'ogg'
+  return fallback
+}
 
 function normalizeCaptureSourceText(value?: string | null) {
   return (value || '')
@@ -154,8 +167,14 @@ const ScreenMonitor: React.FC = () => {
   const [captureNowLoading, setCaptureNowLoading] = useState(false)
   const [apiConnectionStatus, setApiConnectionStatus] = useState<ApiConnectionStatus>('unknown')
   const [apiConnectionMessage, setApiConnectionMessage] = useState('')
+  const [audioRecording, setAudioRecording] = useState(false)
+  const [audioSaving, setAudioSaving] = useState(false)
   const activityPollingRef = useRef<NodeJS.Timeout | null>(null)
   const statsPollingRef = useRef<NodeJS.Timeout | null>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioStartedAtRef = useRef<Date | null>(null)
   const settingsFormInitializedRef = useRef(false)
   const lastCheckedTimeRef = useRef<string>(
     activities.length > 0
@@ -683,6 +702,113 @@ const ScreenMonitor: React.FC = () => {
     }
   })
 
+  const cleanupAudioRecordingStream = useMemoizedFn(() => {
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop())
+    audioStreamRef.current = null
+    audioRecorderRef.current = null
+  })
+
+  const startAudioRecording = useMemoizedFn(async () => {
+    if (audioRecording || audioSaving) {
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      Message.error('Audio recording is not supported in this environment.')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = getSupportedRecordingMimeType([
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ])
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+
+      audioChunksRef.current = []
+      audioStartedAtRef.current = new Date()
+      audioStreamRef.current = stream
+      audioRecorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = (event) => {
+        logger.error('Audio recording failed', { event })
+        Message.error('Audio recording failed.')
+        setAudioRecording(false)
+        setAudioSaving(false)
+        cleanupAudioRecordingStream()
+      }
+
+      recorder.onstop = async () => {
+        const endedAt = new Date()
+        const chunks = audioChunksRef.current
+        const startedAt = audioStartedAtRef.current || endedAt
+        cleanupAudioRecordingStream()
+        setAudioRecording(false)
+
+        if (!chunks.length) {
+          setAudioSaving(false)
+          Message.warning('No audio data was recorded.')
+          return
+        }
+
+        const blobType = recorder.mimeType || mimeType || 'audio/webm'
+        const blob = new Blob(chunks, { type: blobType })
+        const extension = getRecordingExtension(blobType, 'webm')
+        const filename = `audio-recording-${dayjs(startedAt).format('YYYYMMDD-HHmmss')}.${extension}`
+
+        try {
+          await uploadMediaContextAPI({
+            mediaType: 'audio',
+            file: blob,
+            filename,
+            title: 'Audio recording',
+            startedAt: startedAt.toISOString(),
+            endedAt: endedAt.toISOString(),
+            summary: `Audio recording captured from ${dayjs(startedAt).format('YYYY-MM-DD HH:mm:ss')} to ${dayjs(
+              endedAt
+            ).format('YYYY-MM-DD HH:mm:ss')}.`
+          })
+          Message.success('Audio recording saved to context')
+        } catch (error: any) {
+          Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to save audio recording')
+        } finally {
+          setAudioSaving(false)
+          audioChunksRef.current = []
+          audioStartedAtRef.current = null
+        }
+      }
+
+      recorder.start(1000)
+      setAudioRecording(true)
+      Message.success('Audio recording started')
+    } catch (error: any) {
+      cleanupAudioRecordingStream()
+      setAudioRecording(false)
+      setAudioSaving(false)
+      Message.error(get(error, 'message') || 'Failed to start audio recording')
+    }
+  })
+
+  const stopAudioRecording = useMemoizedFn(() => {
+    const recorder = audioRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') {
+      cleanupAudioRecordingStream()
+      setAudioRecording(false)
+      setAudioSaving(false)
+      return
+    }
+    setAudioSaving(true)
+    recorder.stop()
+  })
+
   // Tips: The biggest problem with using Form for management is that when the user does not select any screen or window, it will cause the save to fail
   const handleSave = useMemoizedFn(async () => {
     const values = form.getFieldsValue()
@@ -747,6 +873,10 @@ const ScreenMonitor: React.FC = () => {
           onCheckApiConnection={checkApiConnection}
           onCaptureNow={captureNow}
           captureNowLoading={captureNowLoading}
+          audioRecording={audioRecording}
+          audioSaving={audioSaving}
+          onStartAudioRecording={startAudioRecording}
+          onStopAudioRecording={stopAudioRecording}
           onStartMonitoring={startMonitoring}
           onStopMonitoring={stopMonitoring}
           onRequestPermission={handleRequestPermission}
