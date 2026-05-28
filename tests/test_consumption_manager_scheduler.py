@@ -108,6 +108,54 @@ class ConsumptionManagerSchedulerTest(unittest.TestCase):
         self.assertEqual(end_time, int(datetime(2026, 5, 20, 0, 0, 0).timestamp()))
         self.assertEqual(end_time - start_time, 24 * 60 * 60)
 
+    def test_no_prior_daily_report_is_due_on_first_check(self):
+        manager = self._build_manager()
+        manager._daily_report_time = "08:00"
+
+        class FakeReportGenerator:
+            def __init__(self):
+                self.calls = []
+
+            async def generate_report(self, start_time, end_time):
+                self.calls.append((start_time, end_time))
+
+        fake_generator = FakeReportGenerator()
+        manager._activity_generator = fake_generator
+        manager._get_last_report_time = lambda: None
+
+        scheduled = {}
+
+        def fake_start_recurring_task(task_name, callback, interval_fn, immediate=False):
+            scheduled["task_name"] = task_name
+            scheduled["callback"] = callback
+            scheduled["interval"] = interval_fn()
+            scheduled["immediate"] = immediate
+
+        manager._start_recurring_task = fake_start_recurring_task
+
+        original_datetime = consumption_manager_module.datetime
+
+        class FakeDatetime(original_datetime):
+            @classmethod
+            def now(cls):
+                return original_datetime(2026, 5, 20, 9, 0, 0)
+
+        try:
+            consumption_manager_module.datetime = FakeDatetime
+            manager._start_report_timer()
+            self.assertIsNone(manager._last_report_date)
+            self.assertEqual(scheduled["task_name"], "report")
+            self.assertTrue(scheduled["immediate"])
+
+            scheduled["callback"]()
+            scheduled["callback"]()
+        finally:
+            consumption_manager_module.datetime = original_datetime
+
+        self.assertEqual(len(fake_generator.calls), 1)
+        self.assertEqual(fake_generator.calls[0], manager._get_daily_report_range(datetime(2026, 5, 20, 9, 0, 0)))
+        self.assertEqual(manager._last_report_date, datetime(2026, 5, 20).date())
+
     def test_recurring_task_replaces_existing_thread(self):
         manager = self._build_manager()
         manager._task_stop_events = {}

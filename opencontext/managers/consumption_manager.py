@@ -243,8 +243,8 @@ class ConsumptionManager:
             )
             return 24 * 60 * 60
 
-    def _get_last_report_time(self) -> datetime:
-        """Get last daily report generation time from database, return current time if none"""
+    def _get_last_report_time(self) -> Optional[datetime]:
+        """Get last daily report generation time from database, or None if no report exists."""
         try:
             reports = get_storage().get_vaults(
                 document_type=VaultType.DAILY_REPORT.value, limit=1, offset=0, is_deleted=False
@@ -253,7 +253,7 @@ class ConsumptionManager:
                 created_at_str = reports[0]["created_at"]
                 if created_at_str:
                     return datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
-            return datetime.now()
+            return None
         except Exception:
             return datetime.now()
 
@@ -266,7 +266,7 @@ class ConsumptionManager:
         # Get last daily report time from database
         last_report_time = self._get_last_report_time()
         self._last_report_date = (
-            last_report_time.date()
+            last_report_time.date() if last_report_time else None
         )  # Record date of last daily report generation
 
         def check_and_generate_daily_report():
