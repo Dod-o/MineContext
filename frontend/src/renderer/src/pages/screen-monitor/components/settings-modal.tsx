@@ -3,6 +3,7 @@ import { Button, Modal, Slider, TimePicker, Radio, Form, Checkbox, Spin, Switch,
 import clsx from 'clsx'
 import { Application } from './application'
 import screenIcon from '@renderer/assets/icons/screen.svg'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 import type {
   AdaptiveCaptureRuleSetting,
   AdaptiveCaptureSettings,
@@ -109,6 +110,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetTempExcludedAppPatterns,
   onSetTempAdaptiveCapture
 }) => {
+  const t = useLocalizedText()
   const updateAdaptiveRule = (
     key: 'windowSwitch' | 'activeAppStable' | 'idleResume',
     value: AdaptiveCaptureRuleSetting
@@ -121,7 +123,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <Modal
-      title="Settings"
+      title={t('Settings', '设置')}
       visible={visible}
       autoFocus={false}
       focusLock
@@ -131,10 +133,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       footer={
         <>
           <Button onClick={onCancel} className="[&_.arco-btn]: !text-xs">
-            Cancel
+            {t('Cancel', '取消')}
           </Button>
           <Button type="primary" onClick={onSave} className="[&_.arco-btn-primary]: !bg-black">
-            Save
+            {t('Save', '保存')}
           </Button>
         </>
       }
@@ -143,7 +145,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <Form layout="vertical" form={form}>
         <div className="flex w-full flex-1 mt-5">
           <div className="flex flex-col flex-1 pr-[24px]">
-            <Form.Item label="Record Interval" className="[&_.arco-form-item-label]:!text-xs">
+            <Form.Item label={t('Record Interval', '记录间隔')} className="[&_.arco-form-item-label]:!text-xs">
               <Slider
                 value={tempRecordInterval}
                 onChange={(value) => onSetTempRecordInterval(value as number)}
@@ -157,17 +159,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 formatTooltip={(value) => `${value}s`}
               />
             </Form.Item>
-            <Form.Item label="Capture target" className="[&_.arco-form-item-label]:!text-xs">
+            <Form.Item label={t('Capture target', '捕捉目标')} className="[&_.arco-form-item-label]:!text-xs">
               <Radio.Group value={tempCaptureTargetMode} onChange={onSetTempCaptureTargetMode}>
                 <Radio value="selected" className="[&_.arco-radio-mask]: !border-[#d7daea]">
-                  Selected sources
+                  {t('Selected sources', '已选来源')}
                 </Radio>
                 <Radio value="active-screen" className="[&_.arco-radio-mask]: !border-[#d7daea]">
-                  Active screen
+                  {t('Active screen', '当前屏幕')}
                 </Radio>
               </Radio.Group>
             </Form.Item>
-            <Form.Item label="Manual capture shortcut" className="[&_.arco-form-item-label]:!text-xs">
+            <Form.Item label={t('Manual capture shortcut', '手动捕捉快捷键')} className="[&_.arco-form-item-label]:!text-xs">
               <div className="flex items-center gap-3">
                 <Switch
                   checked={tempManualCaptureShortcutEnabled}
@@ -181,10 +183,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
             </Form.Item>
-            <Form.Item label="Adaptive capture rules" className="[&_.arco-form-item-label]:!text-xs">
+            <Form.Item label={t('Adaptive capture rules', '自适应捕捉规则')} className="[&_.arco-form-item-label]:!text-xs">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary,#6e718c)]">
-                  Capture after meaningful workflow changes.
+                  {t('Capture after meaningful workflow changes.', '在有意义的工作流变化后自动捕捉。')}
                 </div>
                 <Switch
                   checked={tempAdaptiveCapture.enabled}
@@ -194,39 +196,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               {tempAdaptiveCapture.enabled && (
                 <div className="mt-3 flex flex-col gap-3">
                   <AdaptiveRuleControl
-                    label="Window switch"
-                    description="Capture after the selected active source changes."
+                    label={t('Window switch', '窗口切换')}
+                    description={t('Capture after the selected active source changes.', '所选活动来源变化后捕捉。')}
                     value={tempAdaptiveCapture.windowSwitch}
                     onChange={(value) => updateAdaptiveRule('windowSwitch', value)}
                   />
                   <AdaptiveRuleControl
-                    label="Active app stable"
-                    description="Capture once after the same source stays active."
+                    label={t('Active app stable', '应用稳定后')}
+                    description={t('Capture once after the same source stays active.', '同一来源保持活动后捕捉一次。')}
                     value={tempAdaptiveCapture.activeAppStable}
                     onChange={(value) => updateAdaptiveRule('activeAppStable', value)}
                   />
                   <AdaptiveRuleControl
-                    label="Return from idle"
-                    description="Capture after the system becomes active again."
+                    label={t('Return from idle', '空闲后返回')}
+                    description={t('Capture after the system becomes active again.', '系统重新变为活动状态后捕捉。')}
                     value={tempAdaptiveCapture.idleResume}
                     onChange={(value) => updateAdaptiveRule('idleResume', value)}
                   />
                 </div>
               )}
             </Form.Item>
-            <Form.Item label="Excluded applications" className="[&_.arco-form-item-label]:!text-xs">
+            <Form.Item label={t('Excluded applications', '排除的应用')} className="[&_.arco-form-item-label]:!text-xs">
               <Input.TextArea
                 value={tempExcludedAppPatterns.join('\n')}
                 onChange={(value) => onSetTempExcludedAppPatterns(parseExcludedAppPatterns(value))}
-                placeholder="Window names to skip, one per line"
+                placeholder={t('Window names to skip, one per line', '要跳过的窗口名称，每行一个')}
                 autoSize={{ minRows: 2, maxRows: 4 }}
               />
               <div className="mt-1 text-[11px] leading-[16px] text-[var(--mc-text-secondary,#6e718c)]">
-                Matching window captures are skipped before upload.
+                {t('Matching window captures are skipped before upload.', '匹配的窗口会在上传前跳过。')}
               </div>
             </Form.Item>
             {tempCaptureTargetMode === 'selected' && (
-              <Form.Item label="Choose what to record" shouldUpdate>
+              <Form.Item label={t('Choose what to record', '选择记录内容')} shouldUpdate>
                 {(values) => {
                   const { screenSources = [], windowSources = [] } = values || {}
                   const screenList = screenAllSources?.filter((source) => screenSources.includes(source.id)) || []
@@ -244,7 +246,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 }}
               </Form.Item>
             )}
-            <Form.Item label="Enable recording hours" className="[&_.arco-form-item-label]:!text-xs !mb-0">
+            <Form.Item label={t('Enable recording hours', '启用记录时段')} className="[&_.arco-form-item-label]:!text-xs !mb-0">
               <Switch
                 checked={tempEnableRecordingHours}
                 onChange={onSetTempEnableRecordingHours}
@@ -255,20 +257,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </Form.Item>
             {tempEnableRecordingHours && (
               <div className="!mt-3">
-                <Form.Item label="Set recording hours" className="[&_.arco-form-item-label]:!text-xs">
+                <Form.Item label={t('Set recording hours', '设置记录时段')} className="[&_.arco-form-item-label]:!text-xs">
                   <TimePicker.RangePicker
                     format="HH:mm"
                     value={tempRecordingHours}
                     onChange={(value) => onSetTempRecordingHours(value as [string, string])}
                   />
                 </Form.Item>
-                <Form.Item label="Apply to days" className="[&_.arco-form-item-label]: !text-xs">
+                <Form.Item label={t('Apply to days', '应用到日期')} className="[&_.arco-form-item-label]: !text-xs">
                   <Radio.Group value={tempApplyToDays} onChange={onSetTempApplyToDays}>
                     <Radio value="weekday" className="[&_.arco-radio-mask]: !border-[#d7daea]">
-                      Only weekday
+                      {t('Only weekday', '仅工作日')}
                     </Radio>
                     <Radio value="everyday" className="[&_.arco-radio-mask]: !border-[#d7daea]">
-                      Everyday
+                      {t('Everyday', '每天')}
                     </Radio>
                   </Radio.Group>
                 </Form.Item>
@@ -280,9 +282,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               'flex flex-col flex-1 border-l border-[#efeff4] max-h-[360px] h-[360px] overflow-x-hidden overflow-y-auto px-[16px]  [&_.arco-checkbox-checked_.arco-checkbox-mask]:!bg-[#000000] [&_.arco-checkbox-checked_.arco-checkbox-mask]:!border-[#000000]',
               { hidden: !applicationVisible || tempCaptureTargetMode !== 'selected' }
             )}>
-            <div className="text-[15px] leading-[18px] text-[#42464e] mb-[12px] font-medium">Choose what to record</div>
+            <div className="text-[15px] leading-[18px] text-[#42464e] mb-[12px] font-medium">
+              {t('Choose what to record', '选择记录内容')}
+            </div>
             <div className="[&_.arco-checkbox]:!flex [&_.arco-checkbox]:!items-center">
-              <div className="text-[14px] leading-[20px] text-[#42464e] mb-[4px]">Screen</div>
+              <div className="text-[14px] leading-[20px] text-[#42464e] mb-[4px]">{t('Screen', '屏幕')}</div>
               <Form.Item field="screenSources">
                 <Checkbox.Group className="!grid grid-cols-3 gap-4 relative [&_label]:!mr-0 [&_.arco-checkbox-text]:!ml-0">
                   {screenAllSources.map((source) => (
@@ -325,9 +329,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </Form.Item>
             </div>
             <div className="[&_.arco-checkbox]:!flex [&_.arco-checkbox]:!items-center">
-              <div className="text-[14px] leading-[20px] text-[#42464e] mb-[4px]">Window</div>
+              <div className="text-[14px] leading-[20px] text-[#42464e] mb-[4px]">{t('Window', '窗口')}</div>
               <div className="text-[10px] leading-[12px] text-[#737a87] mb-[4px]">
-                Running applications stay selectable
+                {t('Running applications stay selectable', '运行中的应用会保持可选')}
               </div>
               <Form.Item field="windowSources">
                 <Checkbox.Group className="flex flex-col space-y-4">
@@ -343,7 +347,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           {source.name}
                         </div>
                         {!source.isVisible && (
-                          <span className="text-[10px] leading-[14px] text-[#737a87]">Hidden</span>
+                          <span className="text-[10px] leading-[14px] text-[#737a87]">{t('Hidden', '隐藏')}</span>
                         )}
                       </div>
                     </Checkbox>

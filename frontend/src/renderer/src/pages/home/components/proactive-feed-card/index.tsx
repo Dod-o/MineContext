@@ -13,6 +13,7 @@ import { formatRelativeTime } from '@renderer/utils/time'
 import chatIcon from '@renderer/assets/icons/chat-icon.svg'
 import feedEmptyIcon from '@renderer/assets/icons/feed-empty.svg'
 import { useNavigation } from '@renderer/hooks/use-navigation'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 
 // Define the properties received by the component
 interface FeedCardProps {
@@ -27,6 +28,7 @@ interface FeedCardProps {
 
 const ProactiveFeedCardItem: FC<FeedCardProps> = (props) => {
   const { id, feedType, time, desc, doc_content, doc_id } = props
+  const t = useLocalizedText()
   // const isDocument =
   //   feedType === PushDataTypes.DAILY_SUMMARY_GENERATED || feedType === PushDataTypes.WEEKLY_SUMMARY_GENERATED
   // const { navigateToVault } = useNavigation()
@@ -50,19 +52,19 @@ const ProactiveFeedCardItem: FC<FeedCardProps> = (props) => {
   const [eventIcon, eventTitle] = useMemo(() => {
     switch (feedType) {
       case PushDataTypes.TIP_GENERATED:
-        return ['💡', 'Tip']
+        return ['💡', t('Tip', '提示')]
       case PushDataTypes.DAILY_SUMMARY_GENERATED:
-        return ['👋', 'Daily Summary']
+        return ['👋', t('Daily Summary', '每日摘要')]
       case PushDataTypes.WEEKLY_SUMMARY_GENERATED:
-        return ['🌟', 'Weekly Summary']
+        return ['🌟', t('Weekly Summary', '每周摘要')]
       default:
-        return ['🔔', 'New Notification']
+        return ['🔔', t('New Notification', '新通知')]
     }
-  }, [feedType])
+  }, [feedType, t])
 
   const handleRemoveEvent = (id: string) => {
     removeEvent(id)
-    Message.success('insight deleted')
+    Message.success(t('insight deleted', '洞察已删除'))
   }
 
   return (
@@ -102,7 +104,7 @@ const ProactiveFeedCardItem: FC<FeedCardProps> = (props) => {
                 <img src={chatIcon} alt="chat icon" />
               </div>
               <div className="text-[var(--text-color-text-3,#5252FF)] font-['Roboto'] text-xs font-normal leading-5">
-                {feedType === PushDataTypes.DAILY_SUMMARY_GENERATED ? 'View' : 'Check'}
+                {feedType === PushDataTypes.DAILY_SUMMARY_GENERATED ? t('View', '查看') : t('Check', '查看')}
               </div>
             </div>
           </div>
@@ -119,6 +121,7 @@ const ProactiveFeedCardItem: FC<FeedCardProps> = (props) => {
 }
 
 const ProactiveFeedCard: React.FC = ({}) => {
+  const t = useLocalizedText()
   const { feedEvents } = useEvents()
   const transferType = (event: FeedEvent): FeedCardProps => {
     return {
@@ -139,7 +142,7 @@ const ProactiveFeedCard: React.FC = ({}) => {
         <div className="flex px-[2px] justify-center items-center gap-[4px] rounded-[2px] bg-gradient-to-l from-[rgba(239,251,248,0.5)] to-[#F5FBEF]">
           💡
           <div className="font-['Roboto'] text-[15px] font-extralight leading-[22px] tracking-[0.045px] bg-gradient-to-l from-[#00C469] to-[#0026B1] bg-clip-text text-transparent">
-            Proactive
+            {t('Proactive', '主动')}
           </div>
         </div>
         <div
@@ -147,7 +150,7 @@ const ProactiveFeedCard: React.FC = ({}) => {
           style={{
             fontWeight: 500
           }}>
-          Feed
+          {t('Feed', '洞察')}
         </div>
       </div>
       <div
@@ -158,7 +161,7 @@ const ProactiveFeedCard: React.FC = ({}) => {
           <div className="flex flex-col items-center justify-center mt-14 gap-[8px]">
             <img src={feedEmptyIcon} alt="empty icon" />
             <div className="w-[182px] text-center text-[#6E718C] font-roboto text-[12px] font-normal leading-[20px] tracking-[0.036px]">
-              Proactive insights will appear here to help you
+              {t('Proactive insights will appear here to help you', '主动洞察会显示在这里，帮助你掌握重点')}
             </div>
           </div>
         )}

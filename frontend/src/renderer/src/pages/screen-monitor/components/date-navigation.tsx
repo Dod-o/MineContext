@@ -2,6 +2,7 @@ import React from 'react'
 import { Button, Typography, DatePicker } from '@arco-design/web-react'
 import { IconLeft, IconRight, IconDown } from '@arco-design/web-react/icon'
 import dayjs from 'dayjs'
+import { useAppLanguage, useLocalizedText } from '@renderer/hooks/use-app-language'
 
 const { Text } = Typography
 
@@ -26,6 +27,9 @@ const DateNavigation: React.FC<DateNavigationProps> = ({
   onSetCurrentDate,
   disabledDate
 }) => {
+  const t = useLocalizedText()
+  const language = useAppLanguage()
+
   return (
     <div className="flex justify-between items-center mb-4">
       <div className="flex items-center">
@@ -34,7 +38,7 @@ const DateNavigation: React.FC<DateNavigationProps> = ({
             <Button
               className="[&_.arco-btn-primary]: !bg-white [&_.arco-btn-primary]: !border-gray-200 [&_.arco-btn-primary]: !h-6 [&_.arco-btn-primary]: !text-black [&_.arco-btn-primary]:  !text-xs [&_.arco-btn-primary]: !mr-2 [&_.arco-btn:hover]: !bg-gray-50"
               onClick={() => onSetCurrentDate(new Date())}>
-              Today
+              {t('Today', '今天')}
             </Button>
             <Button
               icon={<IconLeft />}
@@ -48,7 +52,7 @@ const DateNavigation: React.FC<DateNavigationProps> = ({
               triggerElement={
                 <Button className="[&_.arco-btn-primary]: !h-[22px] [&_.arco-btn-primary]: !bg-transparent [&_.arco-btn-primary]: !border-none [&_.arco-btn-primary]: !p-0 [&_.arco-btn:hover]: !bg-gray-50">
                   <Text className="[&_.arco-typography]: !font-medium [&_.arco-typography]: !text-sm">
-                    {dayjs(currentDate).format('MMMM D, YYYY')}
+                    {dayjs(currentDate).format(language === 'zh' ? 'YYYY年M月D日' : 'MMMM D, YYYY')}
                   </Text>
                   <IconDown className="ml-1 w-3 h-3" />
                 </Button>

@@ -45,7 +45,11 @@ const api = {
   cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload),
   getTheme: (): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_GetTheme),
   setTheme: (mode: ThemeMode): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_SetTheme, mode),
-  setLanguage: (language: AppLanguage): Promise<AppLanguage> => ipcRenderer.invoke(IpcChannel.App_SetLanguage, language),
+  setLanguage: async (language: AppLanguage): Promise<AppLanguage> => {
+    const nextLanguage = await ipcRenderer.invoke(IpcChannel.App_SetLanguage, language)
+    window.dispatchEvent(new CustomEvent('app-language-updated', { detail: nextLanguage }))
+    return nextLanguage
+  },
   getRuntimeSettings: (): Promise<AppRuntimeSettings> => ipcRenderer.invoke(IpcChannel.App_GetRuntimeSettings),
   setRuntimeSettings: (settings: Partial<AppRuntimeSettings>): Promise<AppRuntimeSettings> =>
     ipcRenderer.invoke(IpcChannel.App_SetRuntimeSettings, settings),

@@ -31,6 +31,7 @@ import mediumPriorityIcon from '@renderer/assets/icons/medium-priority.svg'
 import lowPriorityIcon from '@renderer/assets/icons/low-priority.svg'
 import doneIcon from '@renderer/assets/icons/done.svg'
 import dayjs from 'dayjs'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 
 const { Text } = Typography
 const TextArea = Input.TextArea
@@ -51,18 +52,18 @@ function getTodoIcon(urgency: TaskUrgency) {
   }
 }
 
-function genTodoTitle(urgency: TaskUrgency) {
+function genTodoTitle(urgency: TaskUrgency, t: (english: string, chinese: string) => string) {
   switch (urgency) {
     case TaskUrgency.High:
-      return 'Urgent'
+      return t('Urgent', '紧急')
     case TaskUrgency.Medium:
-      return 'Medium Priority'
+      return t('Medium Priority', '中优先级')
     case TaskUrgency.Low:
-      return 'Low Priority'
+      return t('Low Priority', '低优先级')
     case TaskUrgency.Done:
-      return 'Done'
+      return t('Done', '已完成')
     default:
-      return 'Unknown Priority'
+      return t('Unknown Priority', '未知优先级')
   }
 }
 export interface ToDoCardProps {
@@ -70,6 +71,7 @@ export interface ToDoCardProps {
 }
 const ToDoCard: FC<ToDoCardProps> = (props) => {
   const { selectedDays } = props
+  const t = useLocalizedText()
   const { tasks, toggleTaskStatus, updateTask, deleteTask, addTask, fetchTasks } = useHomeInfo()
   const [isTaskHover, setIsTaskHover] = useState<number | null>(null) // Edit task status
   const [isDeleting, setIsDeleting] = useState(false)
@@ -117,9 +119,9 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       } else {
         await deleteTask(taskId)
       }
-      Message.success('task delete success')
+      Message.success(t('task delete success', '任务删除成功'))
     } catch (error) {
-      Message.error('task delete failed')
+      Message.error(t('task delete failed', '任务删除失败'))
     } finally {
       setIsDeleting(false)
       setIsTaskHover(null)
@@ -138,7 +140,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
         setCopiedTaskId(null)
       }, 2000)
     } catch (error) {
-      Message.error('Failed to copy content')
+      Message.error(t('Failed to copy content', '复制内容失败'))
     }
   })
 
@@ -181,9 +183,9 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       }
       setSelectedTaskIds([])
       setIsBatchMode(false)
-      Message.success('tasks delete success')
+      Message.success(t('tasks delete success', '任务删除成功'))
     } catch (error) {
-      Message.error('tasks delete failed')
+      Message.error(t('tasks delete failed', '任务删除失败'))
     } finally {
       setIsBatchDeleting(false)
       setIsTaskHover(null)
@@ -193,9 +195,9 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
   const handleConfirmGeneratedTask = useMemoizedFn(async (taskId: number) => {
     try {
       await updateTask(taskId, { status: TaskStatus.Pending })
-      Message.success('task confirmed')
+      Message.success(t('task confirmed', '任务已确认'))
     } catch (error) {
-      Message.error('task confirm failed')
+      Message.error(t('task confirm failed', '任务确认失败'))
     }
   })
 
@@ -204,18 +206,18 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       for (const task of reviewTasks) {
         await updateTask(task.id, { status: TaskStatus.Pending })
       }
-      Message.success('tasks confirmed')
+      Message.success(t('tasks confirmed', '任务已确认'))
     } catch (error) {
-      Message.error('tasks confirm failed')
+      Message.error(t('tasks confirm failed', '任务确认失败'))
     }
   })
 
   const handleDeleteGeneratedTask = useMemoizedFn(async (taskId: number) => {
     try {
       await deleteTask(taskId)
-      Message.success('task delete success')
+      Message.success(t('task delete success', '任务删除成功'))
     } catch (error) {
-      Message.error('task delete failed')
+      Message.error(t('task delete failed', '任务删除失败'))
     }
   })
 
@@ -224,9 +226,9 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       for (const task of reviewTasks) {
         await deleteTask(task.id)
       }
-      Message.success('tasks delete success')
+      Message.success(t('tasks delete success', '任务删除成功'))
     } catch (error) {
-      Message.error('tasks delete failed')
+      Message.error(t('tasks delete failed', '任务删除失败'))
     }
   })
 
@@ -273,7 +275,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
         </div>
         {!isBatchMode && (
           <div className={`flex items-center ml-2 gap-3 ${isTaskHover === task.id ? 'opacity-100' : 'opacity-0'}`}>
-            <Tooltip content="Copied!" position="top" popupVisible={copiedTaskId === task.id}>
+            <Tooltip content={t('Copied!', '已复制')} position="top" popupVisible={copiedTaskId === task.id}>
               <Button
                 type="text"
                 size="small"
@@ -284,8 +286,8 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
               />
             </Tooltip>
             <Popconfirm
-              title="Confirm delete"
-              content="Confirm to delete this todo?"
+              title={t('Confirm delete', '确认删除')}
+              content={t('Confirm to delete this todo?', '确认删除这条待办吗？')}
               onOk={() => handleDeleteTask(task.id)}
               onCancel={() => {
                 setIsDeleting(false)
@@ -297,8 +299,8 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                   setIsTaskHover(null)
                 }
               }}
-              okText="Confirm"
-              cancelText="Cancel">
+              okText={t('Confirm', '确认')}
+              cancelText={t('Cancel', '取消')}>
               <Button
                 type="text"
                 size="small"
@@ -323,16 +325,16 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button type="text" size="mini" icon={<IconCheck />} onClick={() => handleConfirmGeneratedTask(task.id)}>
-          Add
+          {t('Add', '添加')}
         </Button>
         <Popconfirm
-          title="Confirm delete"
-          content="Confirm to delete this todo?"
+          title={t('Confirm delete', '确认删除')}
+          content={t('Confirm to delete this todo?', '确认删除这条待办吗？')}
           onOk={() => handleDeleteGeneratedTask(task.id)}
-          okText="Confirm"
-          cancelText="Cancel">
+          okText={t('Confirm', '确认')}
+          cancelText={t('Cancel', '取消')}>
           <Button type="text" size="mini" status="danger" icon={<IconDelete />}>
-            Delete
+            {t('Delete', '删除')}
           </Button>
         </Popconfirm>
       </div>
@@ -348,7 +350,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
           style={{
             fontWeight: 500
           }}>
-          {genTodoTitle(urgency)}
+          {genTodoTitle(urgency, t)}
         </div>
       </div>
     )
@@ -356,22 +358,22 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     const baseTree: { title: React.ReactNode; key: string; children: { title: React.ReactNode; key: string }[] }[] = [
       {
         title: rootTitle(TaskUrgency.High),
-        key: genTodoTitle(TaskUrgency.High),
+        key: genTodoTitle(TaskUrgency.High, t),
         children: []
       },
       {
         title: rootTitle(TaskUrgency.Medium),
-        key: genTodoTitle(TaskUrgency.Medium),
+        key: genTodoTitle(TaskUrgency.Medium, t),
         children: []
       },
       {
         title: rootTitle(TaskUrgency.Low),
-        key: genTodoTitle(TaskUrgency.Low),
+        key: genTodoTitle(TaskUrgency.Low, t),
         children: []
       },
       {
         title: rootTitle(TaskUrgency.Done),
-        key: genTodoTitle(TaskUrgency.Done),
+        key: genTodoTitle(TaskUrgency.Done, t),
         children: []
       }
     ]
@@ -458,7 +460,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
         content: values.content,
         urgency: values.urgency
       })
-      Message.success('Task add success')
+      Message.success(t('Task add success', '任务添加成功'))
     } catch (error: any) {
       Message.error(error.message || '')
     }
@@ -480,7 +482,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
           urgency: values.urgency
         })
       }
-      Message.success('task update success')
+      Message.success(t('task update success', '任务更新成功'))
     } catch (error: any) {
       Message.error(error.message || '')
     }
@@ -530,11 +532,11 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
             <Space style={{ marginTop: 5 }}>
               <div className="flex px-[2px] justify-center items-center gap-[4px] rounded-[2px] bg-gradient-to-l from-[rgba(239,251,248,0.5)] to-[#F5FBEF]">
                 <div className="mr-[0.3em] font-['Roboto'] text-[15px] font-extralight leading-[22px] tracking-[0.045px] bg-gradient-to-l from-[#007740] to-[#D0B400] bg-clip-text text-transparent">
-                  Todo
+                  {t('Todo', '待办')}
                 </div>
               </div>
               <div className="text-black font-['Roboto'] text-sm font-medium leading-[22px] tracking-[0.042px]">
-                today
+                {t('today', '今天')}
               </div>
             </Space>
             <div className="flex items-center gap-2">
@@ -544,7 +546,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                   size="mini"
                   icon={isBatchMode ? <IconClose /> : <IconSelectAll />}
                   onClick={handleToggleBatchMode}>
-                  {isBatchMode ? 'Cancel' : 'Batch'}
+                  {isBatchMode ? t('Cancel', '取消') : t('Batch', '批量')}
                 </Button>
               )}
               <img src={addIcon} alt="" onClick={handleCreateToDoList} className="cursor-pointer" />
@@ -565,23 +567,23 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
               {reviewTasks.length > 0 && (
                 <div className="flex flex-col gap-2 self-stretch border-b border-[#E1E3EF] pb-3">
                   <div className="flex items-center justify-between gap-3 px-6">
-                    <Text className="font-roboto text-sm font-medium text-[#0B0B0F]">Suggested</Text>
+                    <Text className="font-roboto text-sm font-medium text-[#0B0B0F]">{t('Suggested', '待确认')}</Text>
                     <div className="flex items-center gap-2">
                       <Button
                         type="text"
                         size="mini"
                         icon={<IconCheck />}
                         onClick={handleConfirmAllGeneratedTasks}>
-                        Add all
+                        {t('Add all', '全部添加')}
                       </Button>
                       <Popconfirm
-                        title="Confirm delete"
-                        content="Confirm to delete suggested todos?"
+                        title={t('Confirm delete', '确认删除')}
+                        content={t('Confirm to delete suggested todos?', '确认删除这些建议待办吗？')}
                         onOk={handleDeleteAllGeneratedTasks}
-                        okText="Confirm"
-                        cancelText="Cancel">
+                        okText={t('Confirm', '确认')}
+                        cancelText={t('Cancel', '取消')}>
                         <Button type="text" size="mini" status="danger" icon={<IconDelete />}>
-                          Delete all
+                          {t('Delete all', '全部删除')}
                         </Button>
                       </Popconfirm>
                     </div>
@@ -598,11 +600,11 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                     {selectedVisibleTaskIds.length}/{visibleTaskIds.length}
                   </Checkbox>
                   <Popconfirm
-                    title="Confirm delete"
-                    content="Confirm to delete selected todos?"
+                    title={t('Confirm delete', '确认删除')}
+                    content={t('Confirm to delete selected todos?', '确认删除选中的待办吗？')}
                     onOk={handleDeleteSelectedTasks}
-                    okText="Confirm"
-                    cancelText="Cancel">
+                    okText={t('Confirm', '确认')}
+                    cancelText={t('Cancel', '取消')}>
                     <Button
                       type="text"
                       size="mini"
@@ -610,7 +612,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                       icon={<IconDelete />}
                       disabled={selectedVisibleTaskIds.length === 0}
                       loading={isBatchDeleting}>
-                      Delete
+                      {t('Delete', '删除')}
                     </Button>
                   </Popconfirm>
                 </div>
@@ -620,19 +622,19 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
           ) : (
             <div className="flex flex-col items-center justify-center pt-[60px] pb-[60px] text-center">
               <img src={taskEmpty} alt="empty" className="w-20 h-20 mb-4" />
-              <Text type="secondary">Update at 8 am everyday</Text>
+              <Text type="secondary">{t('Update at 8 am everyday', '每天早上 8 点更新')}</Text>
             </div>
           )}
         </div>
       </Card>
       {/* Edit task modal */}
       <Modal
-        title={status === TODO_LIST_STATUS.Create ? 'Add todo' : 'Edit todo'}
+        title={status === TODO_LIST_STATUS.Create ? t('Add todo', '添加待办') : t('Edit todo', '编辑待办')}
         visible={visible}
         onOk={handleSave}
         onCancel={() => setVisible(false)}
-        okText={status === TODO_LIST_STATUS.Create ? 'Add' : 'Update'}
-        cancelText="Cancel"
+        okText={status === TODO_LIST_STATUS.Create ? t('Add', '添加') : t('Update', '更新')}
+        cancelText={t('Cancel', '取消')}
         unmountOnExit>
         <Form
           layout="vertical"
@@ -643,16 +645,16 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
             <Input className="hidden" />
           </Form.Item>
           <Form.Item
-            label="Todo content"
+            label={t('Todo content', '待办内容')}
             field="content"
-            rules={[{ required: true, message: 'Please input task content' }]}>
-            <TextArea autoSize placeholder="Input todo content" />
+            rules={[{ required: true, message: t('Please input task content', '请输入待办内容') }]}>
+            <TextArea autoSize placeholder={t('Input todo content', '输入待办内容')} />
           </Form.Item>
-          <Form.Item label="Priority" field="urgency">
+          <Form.Item label={t('Priority', '优先级')} field="urgency">
             <Select>
-              <Select.Option value={TaskUrgency.High}>Urgent</Select.Option>
-              <Select.Option value={TaskUrgency.Medium}>Medium Priority</Select.Option>
-              <Select.Option value={TaskUrgency.Low}>Low Priority</Select.Option>
+              <Select.Option value={TaskUrgency.High}>{t('Urgent', '紧急')}</Select.Option>
+              <Select.Option value={TaskUrgency.Medium}>{t('Medium Priority', '中优先级')}</Select.Option>
+              <Select.Option value={TaskUrgency.Low}>{t('Low Priority', '低优先级')}</Select.Option>
             </Select>
           </Form.Item>
         </Form>

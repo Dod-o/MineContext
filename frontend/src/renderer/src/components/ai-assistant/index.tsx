@@ -14,6 +14,7 @@ import { conversationService } from '@renderer/services/conversation-service'
 import { getLogger } from '@shared/logger/renderer'
 import { messageService } from '@renderer/services/messages-service'
 import { AIAssistantHeader } from './header'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -41,6 +42,7 @@ export const MarkdownContent: React.FC<{ content: string }> = ({ content }) => (
 
 const AIAssistant: FC<AIAssistantProps> = (props) => {
   const { visible, onClose, pageName, initConversationId } = props
+  const t = useLocalizedText()
   const [message, setMessage] = useState('')
   const {
     messages,
@@ -137,21 +139,21 @@ const AIAssistant: FC<AIAssistantProps> = (props) => {
   const getStageText = useCallback((stage?: string) => {
     switch (stage) {
       case 'intent_analysis':
-        return 'Analyzing intent'
+        return t('Analyzing intent', '正在分析意图')
       case 'context_gathering':
-        return 'Collecting context'
+        return t('Collecting context', '正在收集上下文')
       case 'execution':
-        return 'Executing'
+        return t('Executing', '正在执行')
       case 'reflection':
-        return 'Reflecting'
+        return t('Reflecting', '正在反思')
       case 'completed':
-        return 'Completed'
+        return t('Completed', '已完成')
       case 'failed':
-        return 'Failed'
+        return t('Failed', '失败')
       default:
-        return 'Processing'
+        return t('Processing', '处理中')
     }
-  }, [])
+  }, [t])
 
   // Get workflow stage color
   const getStageColor = useCallback((stage?: string) => {
@@ -221,20 +223,22 @@ const AIAssistant: FC<AIAssistantProps> = (props) => {
             <div className="mb-6">
               <img src={chatEditIcon} alt="chat-edit" className="w-12 h-12" />
             </div>
-            <Text style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>I am your Context - Aware AI partner</Text>
+            <Text style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
+              {t('I am your Context - Aware AI partner', '我是你的上下文感知 AI 伙伴')}
+            </Text>
             <Text type="secondary" style={{ textAlign: 'center', lineHeight: 1.5 }}>
-              Try asking me
+              {t('Try asking me', '可以这样问我')}
             </Text>
             <div className="mt-6">
               <div
                 className="py-1 px-3  mb-2 cursor-pointer transition-all duration-200 text-[13px] text-gray-800 rounded-lg border border-gray-200 bg-white bg-opacity-50 hover:rounded-lg hover:border-gray-200 hover:bg-white hover:bg-opacity-50"
-                onClick={() => setMessage('Summarize my recent growth')}>
-                Summarize my recent growth
+                onClick={() => setMessage(t('Summarize my recent growth', '总结我最近的成长'))}>
+                {t('Summarize my recent growth', '总结我最近的成长')}
               </div>
               <div
                 className="py-1 px-3  mb-2 cursor-pointer transition-all duration-200 text-[13px] text-gray-800 rounded-lg border border-gray-200 bg-white bg-opacity-50 hover:rounded-lg hover:border-gray-200 hover:bg-white hover:bg-opacity-50"
-                onClick={() => setMessage('List what I have done in the last two hours')}>
-                List what I have done in the last two hours
+                onClick={() => setMessage(t('List what I have done in the last two hours', '列出我过去两小时做了什么'))}>
+                {t('List what I have done in the last two hours', '列出我过去两小时做了什么')}
               </div>
             </div>
           </div>
@@ -290,7 +294,7 @@ const AIAssistant: FC<AIAssistantProps> = (props) => {
                       }
                     }}
                     style={{ fontSize: 12 }}>
-                    Retry
+                    {t('Retry', '重试')}
                   </Button>
                 </div>
               </div>
@@ -303,7 +307,7 @@ const AIAssistant: FC<AIAssistantProps> = (props) => {
         <div className="flex flex-col gap-2 bg-gray-50 rounded-xl p-3 border border-gray-200 transition-all duration-200">
           <div className="flex-1">
             <TextArea
-              placeholder={isLoading ? 'AI is thinking...' : 'Ask me anything'}
+              placeholder={isLoading ? t('AI is thinking...', 'AI 正在思考...') : t('Ask me anything', '随便问我')}
               value={message}
               onChange={setMessage}
               onKeyPress={handleKeyPress}

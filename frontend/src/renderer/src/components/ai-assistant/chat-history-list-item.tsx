@@ -7,6 +7,7 @@ import { conversationService } from '@renderer/services/conversation-service'
 import chatHistoryIcon from '@renderer/assets/icons/ai-assistant/chat-history.svg'
 import renameIcon from '@renderer/assets/icons/rename.svg'
 import clsx from 'clsx'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 export interface ChatHistoryListItemProps {
   conversation: any
   refreshConversationList?: () => void
@@ -15,6 +16,7 @@ export interface ChatHistoryListItemProps {
 
 const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
   const { conversation, refreshConversationList, handleGetMessages } = props
+  const t = useLocalizedText()
   const [renameVisible, setRenameVisible] = useState(false)
   const [form] = Form.useForm()
   const { run: updateConversationTitle } = useRequest(conversationService.updateConversationTitle, { manual: true })
@@ -22,9 +24,12 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
   const handleDelete = useMemoizedFn(async () => {
     // Add your delete logic here
     Modal.confirm({
-      title: 'Delete chat?',
-      content: 'Do you want to delete this chat? It cannot be restored after deletion',
-      okText: 'Delete',
+      title: t('Delete chat?', '删除聊天？'),
+      content: t(
+        'Do you want to delete this chat? It cannot be restored after deletion',
+        '确定要删除这条聊天吗？删除后无法恢复'
+      ),
+      okText: t('Delete', '删除'),
       onOk: () => {
         deleteConversation(conversation.id)
         refreshConversationList?.()
@@ -52,7 +57,7 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
                 setRenameVisible(true)
               }}>
               <img src={renameIcon} className="block w-[14px] h-[14px]" />
-              <div className="text-[14px] leading-[22px]">Rename</div>
+              <div className="text-[14px] leading-[22px]">{t('Rename', '重命名')}</div>
             </div>
             <div
               className="flex items-center px-[12px] py-[6px] gap-[4px] hover:bg-[#f6f7fa] cursor-pointer"
@@ -61,7 +66,7 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
                 handleDelete()
               }}>
               <IconDelete fontSize={14} />
-              <div className="text-[14px] leading-[22px]">Delete</div>
+              <div className="text-[14px] leading-[22px]">{t('Delete', '删除')}</div>
             </div>
           </div>
         )}
@@ -82,7 +87,7 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
           <div className="flex items-center gap-[6px] flex-1">
             <img src={chatHistoryIcon} className="block" />
             <Typography.Text className="!my-0 !flex-1 !text-[13px] !leading-[22px]" ellipsis={{ rows: 1 }}>
-              {conversation.title || 'Untitled Conversation'}
+              {conversation.title || t('Untitled Conversation', '未命名对话')}
             </Typography.Text>
           </div>
           <Trigger
@@ -96,7 +101,7 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
                     setRenameVisible(true)
                   }}>
                   <img src={renameIcon} className="block w-[14px] h-[14px]" />
-                  <div className="text-[14px] leading-[22px]">Rename</div>
+                  <div className="text-[14px] leading-[22px]">{t('Rename', '重命名')}</div>
                 </div>
                 <div
                   className="flex items-center px-[12px] py-[6px] gap-[4px] hover:bg-[#f6f7fa] cursor-pointer"
@@ -105,7 +110,7 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
                     handleDelete()
                   }}>
                   <IconDelete fontSize={14} />
-                  <div className="text-[14px] leading-[22px]">Delete</div>
+                  <div className="text-[14px] leading-[22px]">{t('Delete', '删除')}</div>
                 </div>
               </div>
             )}
@@ -127,13 +132,13 @@ const ChatHistoryListItem: FC<ChatHistoryListItemProps> = (props) => {
         </div>
       </Trigger>
       <Modal
-        okText="Save"
+        okText={t('Save', '保存')}
         style={{ width: 480 }}
-        title="Rename chat"
+        title={t('Rename chat', '重命名聊天')}
         visible={renameVisible}
         onOk={handleRenameSubmit}
         onCancel={() => setRenameVisible(false)}>
-        <Form form={form} initialValues={{ title: conversation.title || 'Untitled Conversation' }}>
+        <Form form={form} initialValues={{ title: conversation.title || t('Untitled Conversation', '未命名对话') }}>
           <Form.Item field="title" className={'!mb-0'}>
             <Input className={'!w-[432px]'} clearIcon />
           </Form.Item>

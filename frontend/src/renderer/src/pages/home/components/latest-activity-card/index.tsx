@@ -8,6 +8,7 @@ import { useMount, useUnmount } from 'ahooks'
 import { ActivityTimelineItem } from '@renderer/pages/screen-monitor/components/activitie-timeline-item'
 import { isEmpty } from 'lodash'
 import dayjs from 'dayjs'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 // import { useServiceHandler } from '@renderer/atom/event-loop.atom'
 // import { POWER_MONITOR_KEY } from '@shared/constant/power-monitor'
 
@@ -23,6 +24,7 @@ interface LatestActivityCardProps {
 
 const LatestActivityCard: FC<LatestActivityCardProps> = () => {
   const { navigateToMainTab } = useNavigation()
+  const t = useLocalizedText()
 
   // Store polling timer ID
   // const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -91,8 +93,8 @@ const LatestActivityCard: FC<LatestActivityCardProps> = () => {
   return (
     <CardLayout
       seeAllClick={handleNavigateToScreenMonitor}
-      title="Latest activity"
-      emptyText="No activity in the last 7 days. "
+      title={t('Latest activity', '最新活动')}
+      emptyText={t('No activity in the last 7 days. ', '最近 7 天暂无活动。')}
       isEmpty={isEmpty(latestActivity)}>
       {latestActivity ? (
         <ActivityTimelineItem

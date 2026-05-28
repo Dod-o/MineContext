@@ -7,6 +7,7 @@ import { useMemoizedFn, useRequest } from 'ahooks'
 import { conversationService } from '@renderer/services/conversation-service'
 import { ChatHistoryList } from './chat-history-list'
 import clsx from 'clsx'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 export interface AIAssistantHeaderProps {
   onClose: () => void
   startNewConversation: () => void
@@ -16,6 +17,7 @@ export interface AIAssistantHeaderProps {
 }
 const AIAssistantHeader: FC<AIAssistantHeaderProps> = (props) => {
   const { onClose, startNewConversation, handleGetMessages, pageName } = props
+  const t = useLocalizedText()
   const {
     runAsync: getConversationList,
     data: conversationList,
@@ -59,7 +61,7 @@ const AIAssistantHeader: FC<AIAssistantHeaderProps> = (props) => {
         onClick={startNewConversation}
         style={{ padding: '12px 16px 12px 0' }}>
         <img src={addChatIcon} alt="add-chat" className="w-[16px] h-[16px] mr-[6px]" />
-        New chat
+        {t('New chat', '新聊天')}
       </div>
       <Space>
         <Popover

@@ -19,6 +19,7 @@ import { useSelector } from 'react-redux'
 import { RootState, useAppDispatch } from '@renderer/store'
 import { useMemoizedFn, useUnmount } from 'ahooks'
 import { HeatmapEntry, MonthType } from './components/heatmap/heatmap'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 
 const { Title, Text } = Typography
 
@@ -35,6 +36,7 @@ const HomePage: React.FC = () => {
   const activeConversationId = useSelector((state: RootState) => state.chatHistory.activeConversationId)
   const { controller, defaultSizes, leftMinSize, rightMinSize } = useAllotment(isVisible)
   const dispatch = useAppDispatch()
+  const t = useLocalizedText()
   useUnmount(() => {
     dispatch(setActiveConversationId(null))
     dispatch(toggleHomeAiAssistant(false))
@@ -58,12 +60,15 @@ const HomePage: React.FC = () => {
                   <div className="rounded-xl w-full flex justify-between items-start">
                     <div className="flex w-[639px] flex-col items-start gap-2">
                       <Title heading={3} style={{ marginTop: 5, fontWeight: 700, fontSize: 24 }}>
-                        Create with <span style={{ color: 'blue', fontWeight: 700 }}>Context</span>, Clarity from
-                        Chaos.👏
+                        {t('Create with ', '用')}
+                        <span style={{ color: 'blue', fontWeight: 700 }}>Context</span>
+                        {t(', Clarity from Chaos.👏', '整理信息，洞察清晰。👏')}
                       </Title>
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        Home is where MineContext proactively delivers your daily summaries, todos, tips and other
-                        insights—emerging from all your collected Contexts ✨
+                        {t(
+                          'Home is where MineContext proactively delivers your daily summaries, todos, tips and other insights—emerging from all your collected Contexts ✨',
+                          'MineContext 会在这里主动呈现每日摘要、待办、提醒和其他洞察，帮助你从收集到的上下文中看清重点 ✨'
+                        )}
                       </Text>
                     </div>
                     <AIToggleButton onClick={() => dispatch(toggleHomeAiAssistant(true))} isActive={isVisible} />
@@ -74,8 +79,8 @@ const HomePage: React.FC = () => {
                     <HeatmapEntry onChange={onChange} />
                     <ToDoCard selectedDays={selectedDays} />
                     <LatestActivityCard
-                      title="Latest activity"
-                      emptyText="No activity in the last 7 days. "
+                      title={t('Latest activity', '最新活动')}
+                      emptyText={t('No activity in the last 7 days. ', '最近 7 天暂无活动。')}
                       hasToDocButton
                     />
                     <DocColumnsCard vaultsList={recentVaults} />

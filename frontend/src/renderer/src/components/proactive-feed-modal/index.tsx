@@ -5,6 +5,7 @@ import { Modal, Button } from '@arco-design/web-react'
 import { FC, ReactNode } from 'react'
 import { MarkdownContent } from '../ai-assistant'
 import titleBg from './assets/bg.png'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 interface ProactiveFeedModalProps {
   visible: boolean
   onCancel: () => void
@@ -14,6 +15,7 @@ interface ProactiveFeedModalProps {
 
 const ProactiveFeedModal: FC<ProactiveFeedModalProps> = (props) => {
   const { visible, onCancel, content } = props
+  const t = useLocalizedText()
 
   // Modal header (including icon, title, subtitle)
   const modalHeader = (
@@ -24,9 +26,11 @@ const ProactiveFeedModal: FC<ProactiveFeedModalProps> = (props) => {
         <div
           className="text-[20px] leading-[22px] bg-[linear-gradient(271.9deg,_#C296FF_-23.68%,_#FF875F_100.99%)]
   bg-clip-text text-transparent font-bold">
-          Proactive Feed
+          {t('Proactive Feed', '主动洞察')}
         </div>
-        <div className="text-[12px] leading-[20px] text-[#6e718c]">Here are some insights you should know</div>
+        <div className="text-[12px] leading-[20px] text-[#6e718c]">
+          {t('Here are some insights you should know', '这里有一些值得关注的洞察')}
+        </div>
       </div>
     </div>
   )
@@ -48,7 +52,7 @@ const ProactiveFeedModal: FC<ProactiveFeedModalProps> = (props) => {
         style={{
           backgroundColor: '#0B0B0F'
         }}>
-        I got it
+        {t('I got it', '知道了')}
       </Button>
     </div>
   )
