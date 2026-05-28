@@ -33,6 +33,21 @@ class WindowCaptureSourceStaticTest(unittest.TestCase):
         self.assertIn("Virtual window has windows on some space", capture_sources)
         self.assertIn("Virtual window assumed visible (no space detection)", capture_sources)
 
+    def test_adaptive_capture_detects_software_and_task_switches(self):
+        task = SCREEN_MONITOR_TASK.read_text(encoding="utf-8")
+
+        self.assertIn("private getAdaptiveCaptureSignature(visibleSources: CaptureSource[])", task)
+        self.assertIn("const selectedIds = new Set(this.appInfo.map((source) => source.id))", task)
+        self.assertIn("const selectedNames = new Set(this.appInfo.map((source) => source.name?.toLowerCase()).filter(Boolean))", task)
+        self.assertIn("return selectedIds.has(source.id) || selectedNames.has(source.name?.toLowerCase())", task)
+        self.assertIn(
+            "const source = candidates.find((item) => item.type === 'window') || candidates.find((item) => item.type === 'screen')",
+            task,
+        )
+        self.assertIn("source ? `${source.type}:${source.id}:${source.name || ''}` : ''", task)
+        self.assertIn("sourceSignature !== this.lastAdaptiveSourceSignature", task)
+        self.assertIn("this.scheduleAdaptiveCapture('window-switch', rules.windowSwitch.delaySeconds)", task)
+
 
 if __name__ == "__main__":
     unittest.main()
