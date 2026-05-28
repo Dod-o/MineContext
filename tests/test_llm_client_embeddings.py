@@ -122,6 +122,7 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertTrue(valid, message)
         self.assertEqual(FakeOpenAI.last_api_key, "not-needed")
+        self.assertEqual(FakeOpenAI.last_base_url, "http://127.0.0.1:52625/v1")
 
     def test_full_chat_completion_endpoint_is_normalized_to_base_url(self):
         self.llm_client.LLMClient(
