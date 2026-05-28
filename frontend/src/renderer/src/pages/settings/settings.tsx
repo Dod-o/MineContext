@@ -63,7 +63,6 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
           <FormItem
             field={`${prefix}-apiKey`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
             requiredSymbol={false}>
             <Input.Password
               addBefore={<InputPrefix label="API Key" />}
@@ -103,7 +102,6 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
           <FormItem
             field={`${prefix}-embeddingApiKey`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
             requiredSymbol={false}>
             <Input.Password
               addBefore={<InputPrefix label="API Key" />}

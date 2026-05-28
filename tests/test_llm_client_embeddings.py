@@ -17,9 +17,11 @@ class FakeEmbeddings:
 
 class FakeOpenAI:
     last_base_url = None
+    last_api_key = None
 
     def __init__(self, **kwargs):
         FakeOpenAI.last_base_url = kwargs.get("base_url")
+        FakeOpenAI.last_api_key = kwargs.get("api_key")
         self.embeddings = FakeEmbeddings()
         self.chat = types.SimpleNamespace(
             completions=types.SimpleNamespace(create=lambda **kwargs: types.SimpleNamespace(choices=[object()]))
@@ -73,6 +75,22 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertTrue(valid, message)
         self.assertEqual(message, "Embedding model validation successful")
+
+    def test_custom_embedding_allows_local_server_without_api_key(self):
+        client = self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.EMBEDDING,
+            config={
+                "base_url": "http://127.0.0.1:52625/v1",
+                "api_key": "",
+                "model": "embed-gemma:300m",
+                "provider": "custom",
+            },
+        )
+
+        valid, message = client.validate()
+
+        self.assertTrue(valid, message)
+        self.assertEqual(FakeOpenAI.last_api_key, "not-needed")
 
     def test_full_chat_completion_endpoint_is_normalized_to_base_url(self):
         self.llm_client.LLMClient(

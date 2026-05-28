@@ -55,12 +55,16 @@ class LLMClient:
         self.llm_type = llm_type
         self.config = config
         self.model = config.get("model")
-        self.api_key = config.get("api_key")
         self.base_url = _normalize_base_url(config.get("base_url", ""), llm_type)
         self.timeout = config.get("timeout", 300)
         self.provider = (config.get("provider") or LLMProvider.OPENAI.value).lower()
-        if not self.api_key or not self.base_url or not self.model:
-            raise ValueError("API key, base URL, and model must be provided")
+        self.api_key = config.get("api_key") or (
+            "not-needed" if self.provider == LLMProvider.CUSTOM.value else ""
+        )
+        if not self.base_url or not self.model:
+            raise ValueError("Base URL and model must be provided")
+        if not self.api_key:
+            raise ValueError("API key must be provided")
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
         self.async_client = AsyncOpenAI(
             api_key=self.api_key, base_url=self.base_url, timeout=self.timeout

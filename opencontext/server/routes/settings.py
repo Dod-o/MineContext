@@ -73,6 +73,10 @@ def _build_llm_config(
     return config
 
 
+def _requires_api_key(provider: str | None) -> bool:
+    return (provider or "").lower() != LLMProvider.CUSTOM.value
+
+
 # ==================== API Endpoints ====================
 
 
@@ -121,9 +125,9 @@ async def update_model_settings(request: UpdateModelSettingsRequest, _auth: str 
             emb_provider = cfg.embeddingModelPlatform or cfg.modelPlatform
 
             # Validation
-            if not vlm_key:
+            if not vlm_key and _requires_api_key(cfg.modelPlatform):
                 return convert_resp(code=400, status=400, message="VLM API key cannot be empty")
-            if not emb_key:
+            if not emb_key and _requires_api_key(emb_provider):
                 return convert_resp(
                     code=400, status=400, message="Embedding API key cannot be empty"
                 )
@@ -210,9 +214,9 @@ async def validate_llm_config(request: UpdateModelSettingsRequest, _auth: str = 
         emb_provider = cfg.embeddingModelPlatform or cfg.modelPlatform
 
         # Validation
-        if not vlm_key:
+        if not vlm_key and _requires_api_key(cfg.modelPlatform):
             return convert_resp(code=400, status=400, message="VLM API key cannot be empty")
-        if not emb_key:
+        if not emb_key and _requires_api_key(emb_provider):
             return convert_resp(code=400, status=400, message="Embedding API key cannot be empty")
         if not cfg.modelId:
             return convert_resp(code=400, status=400, message="VLM model ID cannot be empty")
