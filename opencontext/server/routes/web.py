@@ -20,6 +20,11 @@ from opencontext.server.middleware.auth import auth_dependency
 from opencontext.server.opencontext import OpenContext
 from opencontext.server.utils import get_context_lab
 from opencontext.storage.global_storage import get_storage
+from opencontext.utils.raw_context_media import (
+    decode_context_media_path,
+    get_context_media_roots,
+    validate_context_media_path,
+)
 
 router = APIRouter(tags=["web"])
 
@@ -105,6 +110,25 @@ async def chat_page(request: Request):
 async def advanced_chat_page(request: Request):
     """Advanced AI chat interface - redirects to AI document collaboration"""
     return RedirectResponse(url="/vaults")
+
+
+@router.get("/context-files/{path_token}")
+async def serve_context_media_file(path_token: str, _auth: str = auth_dependency):
+    try:
+        decoded_path = decode_context_media_path(path_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid file token") from exc
+
+    try:
+        media_path = validate_context_media_path(
+            decoded_path, get_context_media_roots(project_root)
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="File not found") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    return FileResponse(str(media_path))
 
 
 @router.get("/files/{file_path:path}")

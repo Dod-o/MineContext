@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from opencontext.utils.logging_utils import get_logger
+from opencontext.utils.raw_context_media import build_context_media_url
 
 logger = get_logger(__name__)
 
@@ -241,6 +242,7 @@ class RawContextModel(BaseModel):
     source: str
     create_time: str
     content_path: Optional[str] = None
+    content_url: Optional[str] = None
     content_text: Optional[str] = None
     additional_info: Optional[Dict[str, Any]] = None
 
@@ -250,6 +252,7 @@ class RawContextModel(BaseModel):
     ) -> "RawContextModel":
         """Create API model from RawContextProperties object"""
         content_path = None
+        content_url = None
         if rcp.content_path:
             try:
                 # Convert to relative path from project root
@@ -259,12 +262,16 @@ class RawContextModel(BaseModel):
                 # If path is not under project root, use absolute path
                 content_path = rcp.content_path
 
+            if rcp.content_format.value in {"image", "video"}:
+                content_url = build_context_media_url(rcp.content_path)
+
         return cls(
             object_id=rcp.object_id,
             content_format=rcp.content_format.value,
             source=rcp.source.value,
             create_time=rcp.create_time.isoformat(),
             content_path=content_path,
+            content_url=content_url,
             content_text=rcp.content_text,
             additional_info=rcp.additional_info,
         )
