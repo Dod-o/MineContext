@@ -148,6 +148,39 @@ class ScreenMonitorTask extends ScheduleNextTask {
       throw new Error(res.error || 'Unknown error')
     }
   }
+  private resolveSourcesForCapture(visibleSources: CaptureSource[]) {
+    const visible = visibleSources.filter((source) => source.isVisible)
+    const visibleById = new Map(visible.map((source) => [source.id, source]))
+    const visibleByName = new Map(
+      visible.filter((source) => source.name).map((source) => [source.name.toLowerCase(), source])
+    )
+
+    const resolvedSources = this.appInfo
+      .map((source) => {
+        const refreshedSource = visibleById.get(source.id) || visibleByName.get(source.name.toLowerCase())
+        if (!refreshedSource) {
+          return null
+        }
+
+        return {
+          ...source,
+          id: refreshedSource.id,
+          name: refreshedSource.name || source.name,
+          isVisible: refreshedSource.isVisible ?? source.isVisible
+        }
+      })
+      .filter(Boolean) as CaptureSource[]
+
+    if (resolvedSources.length === 0) {
+      const selectedScreens = this.appInfo.filter((source) => source.type === 'screen')
+      if (selectedScreens.length > 0) {
+        logger.warn('No selected screens matched visible sources; retrying selected screen sources directly')
+        return uniqBy(selectedScreens, 'id')
+      }
+    }
+
+    return uniqBy(resolvedSources, 'id')
+  }
   private async startScreenMonitor() {
     try {
       let visibleSources = this.configCache?.get()
@@ -168,21 +201,26 @@ class ScreenMonitorTask extends ScheduleNextTask {
         return
       }
 
-      const sources = this.appInfo.filter((source) => ids.includes(source.id))
+      const sources = this.resolveSourcesForCapture(visibleSources)
+      if (sources.length === 0) {
+        logger.warn('screen monitor selected sources are not currently capturable')
+        return
+      }
       logger.debug(
         'sources',
         sources.map((v) => pick(v, ['name', 'type']))
       )
       const createTime = dayjs()
       sources.forEach((source) => {
-        queue.add(() => this.handleScreenshotTask(source, createTime))
+        queue.add(() => this.handleScreenshotTask(source, createTime)).catch((error) => {
+          logger.error(`Screenshot task failed for source ${source.id}; recording will continue`, error)
+        })
       })
       logger.debug(`Queue has ${queue.size} tasks. Waiting for idle...`)
       // await queue.onIdle()
       // logger.info('All screenshot tasks have completed.')
     } catch (error) {
-      this.stopTask()
-      logger.error('startScreenMonitor error', error)
+      logger.error('startScreenMonitor error; recording will retry on the next interval', error)
     }
   }
   private broadcastStatus() {
