@@ -20,6 +20,18 @@ from opencontext.utils.logging_utils import get_logger
 logger = get_logger(__name__)
 
 
+def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
+    normalized = base_url.rstrip("/")
+    endpoint_suffixes = {
+        LLMType.CHAT: ("/chat/completions",),
+        LLMType.EMBEDDING: ("/embeddings",),
+    }
+    for suffix in endpoint_suffixes.get(llm_type, ()):
+        if normalized.endswith(suffix):
+            return normalized[: -len(suffix)]
+    return normalized
+
+
 class LLMProvider(Enum):
     OPENAI = "openai"
     DOUBAO = "doubao"
@@ -37,7 +49,7 @@ class LLMClient:
         self.config = config
         self.model = config.get("model")
         self.api_key = config.get("api_key")
-        self.base_url = config.get("base_url")
+        self.base_url = _normalize_base_url(config.get("base_url", ""), llm_type)
         self.timeout = config.get("timeout", 300)
         self.provider = (config.get("provider") or LLMProvider.OPENAI.value).lower()
         if not self.api_key or not self.base_url or not self.model:

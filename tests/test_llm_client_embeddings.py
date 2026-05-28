@@ -16,8 +16,14 @@ class FakeEmbeddings:
 
 
 class FakeOpenAI:
+    last_base_url = None
+
     def __init__(self, **kwargs):
+        FakeOpenAI.last_base_url = kwargs.get("base_url")
         self.embeddings = FakeEmbeddings()
+        self.chat = types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **kwargs: types.SimpleNamespace(choices=[object()]))
+        )
 
 
 class FakeAsyncOpenAI:
@@ -67,6 +73,19 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertTrue(valid, message)
         self.assertEqual(message, "Embedding model validation successful")
+
+    def test_full_chat_completion_endpoint_is_normalized_to_base_url(self):
+        self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                "api_key": "test-key",
+                "model": "doubao-test",
+                "provider": "doubao",
+            },
+        )
+
+        self.assertEqual(FakeOpenAI.last_base_url, "https://ark.cn-beijing.volces.com/api/v3")
 
 
 if __name__ == "__main__":
