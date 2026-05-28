@@ -31,7 +31,7 @@ from opencontext.models.enums import get_context_type_descriptions_for_extractio
 from opencontext.monitoring.monitor import record_processing_error
 from opencontext.storage.global_storage import get_storage
 from opencontext.tools.tool_definitions import ALL_TOOL_DEFINITIONS
-from opencontext.utils.image import calculate_phash, resize_image
+from opencontext.utils.image import calculate_phash, normalize_hdr_screenshot, resize_image
 from opencontext.utils.json_parser import parse_json_from_response
 from opencontext.utils.logging_utils import get_logger
 from opencontext.config.global_config import get_prompt_group
@@ -68,6 +68,7 @@ class ScreenshotProcessor(BaseContextProcessor):
         self._max_raw_properties = self.config.get("max_raw_properties", 5)
         self._max_image_size = self.config.get("max_image_size", 0)
         self._resize_quality = self.config.get("resize_quality", 95)
+        self._normalize_hdr_screenshots = self.config.get("normalize_hdr_screenshots", True)
         self._enabled_delete = self.config.get("enabled_delete", False)
 
         self._stop_event = threading.Event()
@@ -155,6 +156,8 @@ class ScreenshotProcessor(BaseContextProcessor):
         if not self.can_process(context):
             return False
         try:
+            if self._normalize_hdr_screenshots:
+                normalize_hdr_screenshot(context.content_path)
             if self._max_image_size > 0:
                 resize_image(context.content_path, self._max_image_size, self._resize_quality)
             if not self._is_duplicate(context):

@@ -89,6 +89,7 @@ processing:
     batch_timeout: 10 # Reduce timeout to improve response speed
     max_image_size: 1920 # Limit image size to reduce memory usage
     resize_quality: 85 # Balance quality and performance
+    normalize_hdr_screenshots: true # Correct washed-out HDR captures before VLM processing
     enabled_delete: true
     max_raw_properties: 5
 
