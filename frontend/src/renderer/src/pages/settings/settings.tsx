@@ -17,13 +17,17 @@ import {
 import ModelRadio from './components/modelRadio/model-radio'
 import { ModelTypeList, BaseUrl, embeddingModels, ModelInfoList } from './constants'
 import {
+  ContentGenerationConfigProps,
+  ContentGenerationIntervalConfigProps,
   deleteModelProfileAPI,
+  getGeneralSettingsAPI,
   getModelInfo,
   getModelProfilesAPI,
   getPromptsAPI,
   ModelConfigProps,
   ModelProfileProps,
   PromptsConfigProps,
+  updateGeneralSettingsAPI,
   updatePromptsAPI,
   updateModelSettingsAPI
 } from '../../services/Settings'
@@ -273,6 +277,59 @@ const PROMPT_CATEGORY_OPTIONS: PromptCategoryOption[] = [
   }
 ]
 
+type GenerationIntervalKey = 'activity' | 'tips' | 'todos'
+
+interface GenerationIntervalOption {
+  key: GenerationIntervalKey
+  label: string
+  description: string
+  fallbackInterval: number
+  minInterval: number
+}
+
+const GENERATION_INTERVAL_OPTIONS: GenerationIntervalOption[] = [
+  {
+    key: 'activity',
+    label: 'Activity summaries',
+    description: 'Generate concise activity records from recent screen context.',
+    fallbackInterval: 900,
+    minInterval: 600
+  },
+  {
+    key: 'tips',
+    label: 'Smart tips',
+    description: 'Generate planning suggestions and reminders.',
+    fallbackInterval: 3600,
+    minInterval: 1800
+  },
+  {
+    key: 'todos',
+    label: 'Todos',
+    description: 'Extract suggested tasks from recent activity.',
+    fallbackInterval: 1800,
+    minInterval: 1800
+  }
+]
+
+const DEFAULT_CONTENT_GENERATION_SETTINGS: ContentGenerationConfigProps = {
+  activity: {
+    enabled: true,
+    interval: 900
+  },
+  tips: {
+    enabled: true,
+    interval: 3600
+  },
+  todos: {
+    enabled: true,
+    interval: 1800
+  },
+  report: {
+    enabled: true,
+    time: '08:00'
+  }
+}
+
 const NON_PROMPT_TOP_LEVEL_KEYS = new Set([
   'api_auth',
   'capture',
@@ -332,6 +389,47 @@ const setPromptPair = (prompts: PromptsConfigProps, path: string, pair: PromptPa
   return nextPrompts
 }
 
+const normalizeIntervalConfig = (
+  config: ContentGenerationIntervalConfigProps | undefined,
+  fallbackInterval: number
+): Required<ContentGenerationIntervalConfigProps> => {
+  const interval = Number(config?.interval)
+  return {
+    ...(config || {}),
+    enabled: config?.enabled !== false,
+    interval: Number.isFinite(interval) && interval > 0 ? interval : fallbackInterval
+  }
+}
+
+const normalizeReportTime = (time: unknown): string => {
+  return typeof time === 'string' && /^\d{2}:\d{2}$/.test(time) ? time : '08:00'
+}
+
+const normalizeContentGenerationSettings = (settings?: ContentGenerationConfigProps): ContentGenerationConfigProps => {
+  const source = settings || {}
+  return {
+    ...source,
+    activity: normalizeIntervalConfig(source.activity, 900),
+    tips: normalizeIntervalConfig(source.tips, 3600),
+    todos: normalizeIntervalConfig(source.todos, 1800),
+    report: {
+      ...(source.report || {}),
+      enabled: source.report?.enabled !== false,
+      time: normalizeReportTime(source.report?.time)
+    }
+  }
+}
+
+const getGenerationIntervalConfig = (
+  settings: ContentGenerationConfigProps,
+  option: GenerationIntervalOption
+): Required<ContentGenerationIntervalConfigProps> => {
+  return normalizeIntervalConfig(
+    settings[option.key] as ContentGenerationIntervalConfigProps | undefined,
+    option.fallbackInterval
+  )
+}
+
 const Settings: FC<SettingsProps> = (props) => {
   const { closeSetting, init } = props
 
@@ -354,6 +452,11 @@ const Settings: FC<SettingsProps> = (props) => {
   const [promptSaving, setPromptSaving] = useState(false)
   const [selectedPromptPath, setSelectedPromptPath] = useState(PROMPT_CATEGORY_OPTIONS[0].value)
   const [promptDraft, setPromptDraft] = useState<PromptPair>({ system: '', user: '' })
+  const [contentGenerationSettings, setContentGenerationSettings] = useState<ContentGenerationConfigProps>(
+    DEFAULT_CONTENT_GENERATION_SETTINGS
+  )
+  const [contentGenerationLoading, setContentGenerationLoading] = useState(false)
+  const [contentGenerationSaving, setContentGenerationSaving] = useState(false)
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
   const { run: getProfiles } = useRequest(getModelProfilesAPI, {
     manual: true,
@@ -502,11 +605,78 @@ const Settings: FC<SettingsProps> = (props) => {
     }
   })
 
+  const loadContentGenerationSettings = useMemoizedFn(async () => {
+    setContentGenerationLoading(true)
+    try {
+      const settings = await getGeneralSettingsAPI()
+      setContentGenerationSettings(normalizeContentGenerationSettings(settings.content_generation))
+    } catch (error: any) {
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || 'Failed to load content generation settings'
+      )
+    } finally {
+      setContentGenerationLoading(false)
+    }
+  })
+
+  const handleSaveContentGenerationSettings = useMemoizedFn(async () => {
+    setContentGenerationSaving(true)
+    try {
+      const nextSettings = normalizeContentGenerationSettings(contentGenerationSettings)
+      await updateGeneralSettingsAPI({ content_generation: nextSettings })
+      setContentGenerationSettings(nextSettings)
+      Message.success('Content generation settings saved')
+    } catch (error: any) {
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || 'Failed to save content generation settings'
+      )
+    } finally {
+      setContentGenerationSaving(false)
+    }
+  })
+
+  const updateContentGenerationInterval = useMemoizedFn(
+    (key: GenerationIntervalKey, patch: Partial<ContentGenerationIntervalConfigProps>) => {
+      const option = GENERATION_INTERVAL_OPTIONS.find((item) => item.key === key)
+      setContentGenerationSettings((settings) => {
+        const current = normalizeIntervalConfig(
+          settings[key] as ContentGenerationIntervalConfigProps | undefined,
+          option?.fallbackInterval || 900
+        )
+        return {
+          ...settings,
+          [key]: {
+            ...current,
+            ...patch
+          }
+        }
+      })
+    }
+  )
+
+  const updateContentGenerationReport = useMemoizedFn(
+    (patch: Partial<NonNullable<ContentGenerationConfigProps['report']>>) => {
+      setContentGenerationSettings((settings) => {
+        const report = settings.report || {}
+        return {
+          ...settings,
+          report: {
+            ...report,
+            enabled: report.enabled !== false,
+            time: normalizeReportTime(report.time),
+            ...patch
+          }
+        }
+      })
+    }
+  )
+
   useMount(() => {
     getInfo()
     getProfiles()
     if (!init) {
       loadPrompts()
+      loadContentGenerationSettings()
     }
     ;(async () => {
       try {
@@ -654,6 +824,11 @@ const Settings: FC<SettingsProps> = (props) => {
     }
   }, [modelInfo, getInfoLoading, setFormFromConfig])
 
+  const reportGenerationSettings = {
+    enabled: contentGenerationSettings.report?.enabled !== false,
+    time: normalizeReportTime(contentGenerationSettings.report?.time)
+  }
+
   return (
     <Spin loading={getInfoLoading} block className="[&_.arco-spin-children]:!h-full !h-full">
       <div className="top-0 left-0 flex flex-col h-full overflow-y-hidden py-2 pr-2 relative">
@@ -724,6 +899,93 @@ const Settings: FC<SettingsProps> = (props) => {
                     {updateDownloading ? 'Downloading' : 'Check'}
                   </Button>
                 )}
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Content generation</div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      Set generation intervals and the daily report time.
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="small"
+                      icon={<IconRefresh />}
+                      loading={contentGenerationLoading}
+                      onClick={loadContentGenerationSettings}>
+                      Reload
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<IconSave />}
+                      loading={contentGenerationSaving}
+                      disabled={contentGenerationLoading}
+                      onClick={handleSaveContentGenerationSettings}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+                <Spin loading={contentGenerationLoading} block>
+                  <div className="flex flex-col gap-4">
+                    {GENERATION_INTERVAL_OPTIONS.map((option) => {
+                      const config = getGenerationIntervalConfig(contentGenerationSettings, option)
+                      return (
+                        <div key={option.key} className="flex items-center justify-between gap-4">
+                          <div>
+                            <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                              {option.label}
+                            </div>
+                            <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                              {option.description}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <Switch
+                              checked={config.enabled}
+                              onChange={(checked) => updateContentGenerationInterval(option.key, { enabled: checked })}
+                            />
+                            <InputNumber
+                              min={option.minInterval}
+                              precision={0}
+                              step={60}
+                              value={config.interval}
+                              onChange={(value) =>
+                                updateContentGenerationInterval(option.key, {
+                                  interval: Number(value) || option.fallbackInterval
+                                })
+                              }
+                              className="!w-[132px]"
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Daily report</div>
+                        <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                          Generate one summary report at this local time.
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <Switch
+                          checked={reportGenerationSettings.enabled}
+                          onChange={(checked) => updateContentGenerationReport({ enabled: checked })}
+                        />
+                        <Input
+                          type="time"
+                          value={reportGenerationSettings.time}
+                          onChange={(value) => updateContentGenerationReport({ time: normalizeReportTime(value) })}
+                          className="!w-[132px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Spin>
               </div>
             )}
             {!init && (

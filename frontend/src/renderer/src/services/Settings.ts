@@ -29,6 +29,32 @@ export interface ModelProfileProps {
 
 export type PromptsConfigProps = Record<string, unknown>
 
+export interface ContentGenerationIntervalConfigProps {
+  enabled?: boolean
+  interval?: number
+}
+
+export interface ContentGenerationReportConfigProps {
+  enabled?: boolean
+  time?: string
+}
+
+export interface ContentGenerationConfigProps {
+  debug?: Record<string, unknown>
+  activity?: ContentGenerationIntervalConfigProps
+  tips?: ContentGenerationIntervalConfigProps
+  todos?: ContentGenerationIntervalConfigProps
+  report?: ContentGenerationReportConfigProps
+  [key: string]: unknown
+}
+
+export interface GeneralSettingsProps {
+  capture?: Record<string, unknown>
+  processing?: Record<string, unknown>
+  logging?: Record<string, unknown>
+  content_generation?: ContentGenerationConfigProps
+}
+
 // Complete API response structure
 export interface ApiResponse<T> {
   code: number
@@ -86,4 +112,13 @@ export const getPromptsAPI = async (): Promise<PromptsConfigProps> => {
 
 export const updatePromptsAPI = async (prompts: PromptsConfigProps): Promise<void> => {
   await axiosInstance.post('/api/settings/prompts', { prompts })
+}
+
+export const getGeneralSettingsAPI = async (): Promise<GeneralSettingsProps> => {
+  const res = await axiosInstance.get<ApiResponse<GeneralSettingsProps>>('/api/settings/general')
+  return get(res, 'data.data') || {}
+}
+
+export const updateGeneralSettingsAPI = async (settings: Partial<GeneralSettingsProps>): Promise<void> => {
+  await axiosInstance.post('/api/settings/general', settings)
 }
