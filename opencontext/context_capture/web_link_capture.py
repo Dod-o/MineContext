@@ -47,8 +47,9 @@ class WebLinkCapture(BaseCaptureComponent):
         self._max_workers = 4
         # Temporary storage for URLs passed to the overridden capture method
         self._urls_to_process: List[str] = []
+        self._filename_hints: Dict[str, Optional[str]] = {}
 
-    def submit_url(self, url: str) -> List[RawContextProperties]:
+    def submit_url(self, url: str, filename_hint: Optional[str] = None) -> List[RawContextProperties]:
         """
         Submits a single URL for immediate capture and processing.
         This is a convenience method that directly calls the main capture logic.
@@ -57,7 +58,7 @@ class WebLinkCapture(BaseCaptureComponent):
             logger.error(f"Invalid URL submitted: {url}")
             return []
         # Directly invoke the capture mechanism for a single URL
-        return self.capture(urls=[url])
+        return self.capture(urls=[url], filename_hints={url: filename_hint})
 
     def convert_url_to_markdown(
         self, url: str, filename_hint: Optional[str] = None
@@ -188,13 +189,18 @@ class WebLinkCapture(BaseCaptureComponent):
         # Nothing to stop, no background threads are managed by this component.
         return True
 
-    def capture(self, urls: Optional[List[str]] = None) -> List[RawContextProperties]:
+    def capture(
+        self,
+        urls: Optional[List[str]] = None,
+        filename_hints: Optional[Dict[str, Optional[str]]] = None,
+    ) -> List[RawContextProperties]:
         """
         Overrides the base capture method to accept a list of URLs.
         It stores the URLs and then calls the base class's capture method.
         """
         if urls:
             self._urls_to_process = urls
+            self._filename_hints = filename_hints or {}
         # Call the base implementation which will, in turn, call _capture_impl
         return super().capture()
 
@@ -218,7 +224,10 @@ class WebLinkCapture(BaseCaptureComponent):
 
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
             # Submit all URL conversion tasks to the thread pool
-            future_to_url = {executor.submit(convert_function, url): url for url in urls_to_process}
+            future_to_url = {
+                executor.submit(convert_function, url, self._filename_hints.get(url)): url
+                for url in urls_to_process
+            }
 
             for future in as_completed(future_to_url):
                 url = future_to_url[future]
