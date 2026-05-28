@@ -21,6 +21,7 @@ from opencontext.tools.tools_executor import ToolsExecutor
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+NO_ACTIVITY_REPORT = "No activity data available for the specified time range."
 
 
 class ReportGenerator:
@@ -44,7 +45,7 @@ class ReportGenerator:
         """
         try:
             result = await self._generate_report_with_llm(start_time, end_time)
-            if not result:
+            if not result or result == NO_ACTIVITY_REPORT:
                 return result
 
             from opencontext.managers.event_manager import EventType, publish_event
@@ -214,7 +215,7 @@ class ReportGenerator:
         hourly_summaries = await self._process_chunks_concurrently(start_time, end_time)
 
         if not hourly_summaries:
-            return "No activity data available for the specified time range."
+            return NO_ACTIVITY_REPORT
 
         # Format hourly summaries for the prompt
         summaries_text = []

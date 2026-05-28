@@ -1,5 +1,6 @@
 import datetime
 import importlib.util
+import asyncio
 from pathlib import Path
 import sys
 import types
@@ -47,6 +48,7 @@ generation_report_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(generation_report_module)
 ReportGenerator = generation_report_module.ReportGenerator
+NO_ACTIVITY_REPORT = generation_report_module.NO_ACTIVITY_REPORT
 
 
 class ReportGeneratorTest(unittest.TestCase):
@@ -58,6 +60,21 @@ class ReportGeneratorTest(unittest.TestCase):
             generator._build_daily_report_title(start_time),
             "Daily Report - 2026-05-19",
         )
+
+    def test_no_activity_report_message_is_stable(self):
+        self.assertEqual(
+            NO_ACTIVITY_REPORT,
+            "No activity data available for the specified time range.",
+        )
+
+    def test_generate_report_does_not_persist_empty_daily_report(self):
+        class _NoActivityReportGenerator(ReportGenerator):
+            async def _generate_report_with_llm(self, *_args):
+                return NO_ACTIVITY_REPORT
+
+        generator = _NoActivityReportGenerator.__new__(_NoActivityReportGenerator)
+
+        self.assertEqual(asyncio.run(generator.generate_report(1, 2)), NO_ACTIVITY_REPORT)
 
 
 if __name__ == "__main__":
