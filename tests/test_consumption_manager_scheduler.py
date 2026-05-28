@@ -4,6 +4,7 @@ import unittest
 import importlib.util
 from pathlib import Path
 import sys
+from datetime import datetime
 
 
 fake_generation_pkg = types.ModuleType("opencontext.context_consumption.generation")
@@ -97,6 +98,15 @@ class ConsumptionManagerSchedulerTest(unittest.TestCase):
         manager._task_intervals["activity"] = 1
 
         self.assertEqual(manager._calculate_check_interval("activity"), 1)
+
+    def test_daily_report_range_covers_full_previous_day(self):
+        manager = self._build_manager()
+
+        start_time, end_time = manager._get_daily_report_range(datetime(2026, 5, 20, 8, 0, 0))
+
+        self.assertEqual(start_time, int(datetime(2026, 5, 19, 0, 0, 0).timestamp()))
+        self.assertEqual(end_time, int(datetime(2026, 5, 20, 0, 0, 0).timestamp()))
+        self.assertEqual(end_time - start_time, 24 * 60 * 60)
 
     def test_recurring_task_replaces_existing_thread(self):
         manager = self._build_manager()

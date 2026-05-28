@@ -299,6 +299,7 @@ class ConsumptionManager:
         )
 
     def _get_daily_report_range(self, now: datetime) -> tuple[int, int]:
+        """Return the full previous local calendar day for scheduled daily reports."""
         report_date = (now - timedelta(days=1)).date()
         start_datetime = datetime.combine(report_date, datetime.min.time())
         end_datetime = start_datetime + timedelta(days=1)
