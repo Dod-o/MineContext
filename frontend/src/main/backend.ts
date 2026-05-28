@@ -189,6 +189,11 @@ function parseHealthCheckResult(result: unknown): any | null {
   return result && typeof result === 'object' ? result : null
 }
 
+function getHealthData(healthCheckResult: unknown): any | null {
+  const parsed = parseHealthCheckResult(healthCheckResult)
+  return parsed?.data ?? parsed
+}
+
 function normalizePathForCompare(value: string): string {
   const resolved = path.resolve(value)
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
@@ -199,8 +204,7 @@ function getExpectedContextPath(): string {
 }
 
 function backendUsesExpectedContextPath(healthCheckResult: unknown): boolean {
-  const parsed = parseHealthCheckResult(healthCheckResult)
-  const data = parsed?.data ?? parsed
+  const data = getHealthData(healthCheckResult)
   const backendContextPath = data?.context_path
 
   if (!backendContextPath || typeof backendContextPath !== 'string') {
@@ -221,7 +225,38 @@ function backendUsesExpectedContextPath(healthCheckResult: unknown): boolean {
   return matches
 }
 
+function getBackendPid(healthCheckResult: unknown): number | null {
+  const data = getHealthData(healthCheckResult)
+  const pid = Number(data?.pid)
+  return Number.isInteger(pid) && pid > 0 ? pid : null
+}
+
+function terminateDuplicateBackend(pid: number, port: number) {
+  if (pid === process.pid) {
+    return
+  }
+
+  try {
+    if (process.platform === 'win32') {
+      const child = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      child.on('error', (error: any) => {
+        logToBackendFile(`Failed to terminate duplicate backend ${pid} on port ${port}: ${error.message}`)
+      })
+    } else {
+      process.kill(pid, 'SIGTERM')
+    }
+    logToBackendFile(`Terminated duplicate backend process ${pid} on port ${port}`)
+  } catch (error: any) {
+    logToBackendFile(`Failed to terminate duplicate backend ${pid} on port ${port}: ${error.message}`)
+  }
+}
+
 async function findRunningBackendPort(startPort: number = 1733, maxAttempts: number = 20) {
+  const compatibleBackends: Array<{ port: number; healthCheckResult: unknown; pid: number | null }> = []
+
   for (let port = startPort; port < startPort + maxAttempts; port++) {
     const available = await isPortAvailable(port)
     if (available) {
@@ -239,15 +274,31 @@ async function findRunningBackendPort(startPort: number = 1733, maxAttempts: num
         continue
       }
       logToBackendFile(`Detected healthy backend on existing port ${port}`)
-      return {
+      compatibleBackends.push({
         port,
-        healthCheckResult
-      }
+        healthCheckResult,
+        pid: getBackendPid(healthCheckResult)
+      })
     } catch (error: any) {
       logToBackendFile(`Port ${port} is occupied but not a healthy MineContext backend: ${error.message}`)
     }
   }
-  return null
+
+  const [primary, ...duplicates] = compatibleBackends
+  for (const duplicate of duplicates) {
+    if (duplicate.pid) {
+      terminateDuplicateBackend(duplicate.pid, duplicate.port)
+    } else {
+      logToBackendFile(`Duplicate backend on port ${duplicate.port} has no pid in health response; cannot terminate`)
+    }
+  }
+
+  return primary
+    ? {
+        port: primary.port,
+        healthCheckResult: primary.healthCheckResult
+      }
+    : null
 }
 
 // Check if backend is running and healthy
