@@ -16,17 +16,28 @@ class FakeEmbeddings:
         return FakeEmbeddingResponse()
 
 
+class FakeArkEmbeddingResponse:
+    def __init__(self):
+        self.data = types.SimpleNamespace(embedding=[0.7, 0.8, 0.9])
+        self.usage = None
+
+
+class FakeChatCompletions:
+    def create(self, **kwargs):
+        FakeOpenAI.last_chat_messages = kwargs.get("messages")
+        return types.SimpleNamespace(choices=[object()])
+
+
 class FakeOpenAI:
     last_base_url = None
     last_api_key = None
+    last_chat_messages = None
 
     def __init__(self, **kwargs):
         FakeOpenAI.last_base_url = kwargs.get("base_url")
         FakeOpenAI.last_api_key = kwargs.get("api_key")
         self.embeddings = FakeEmbeddings()
-        self.chat = types.SimpleNamespace(
-            completions=types.SimpleNamespace(create=lambda **kwargs: types.SimpleNamespace(choices=[object()]))
-        )
+        self.chat = types.SimpleNamespace(completions=FakeChatCompletions())
 
 
 class FakeAsyncOpenAI:
@@ -38,11 +49,14 @@ class FakeAsyncOpenAI:
 
 
 class FakeArk:
+    last_model = None
+
     def __init__(self, **kwargs):
         self.multimodal_embeddings = types.SimpleNamespace(create=self.create_embedding)
 
     def create_embedding(self, **kwargs):
-        raise AssertionError("custom embeddings must not use Ark multimodal_embeddings")
+        FakeArk.last_model = kwargs.get("model")
+        return FakeArkEmbeddingResponse()
 
 
 class FakeHTTPResponse:
@@ -138,6 +152,54 @@ class LLMClientEmbeddingTest(unittest.TestCase):
         )
 
         self.assertEqual(FakeOpenAI.last_base_url, "https://ark.cn-beijing.volces.com/api/v3")
+
+    def test_zhipu_full_chat_completion_endpoint_is_normalized(self):
+        self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                "api_key": "test-key",
+                "model": "glm-4.1v-thinking-flash",
+                "provider": "custom",
+            },
+        )
+
+        self.assertEqual(FakeOpenAI.last_base_url, "https://open.bigmodel.cn/api/paas/v4")
+
+    def test_chat_validation_uses_text_and_image_input(self):
+        client = self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                "api_key": "test-key",
+                "model": "glm-4.1v-thinking-flash",
+                "provider": "custom",
+            },
+        )
+
+        valid, message = client.validate()
+
+        self.assertTrue(valid, message)
+        content = FakeOpenAI.last_chat_messages[0]["content"]
+        self.assertEqual(content[0], {"type": "text", "text": "Hi"})
+        self.assertEqual(content[1]["type"], "image_url")
+        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
+
+    def test_doubao_embedding_large_alias_maps_to_text_model(self):
+        client = self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.EMBEDDING,
+            config={
+                "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+                "api_key": "test-key",
+                "model": "Doubao-embedding-large",
+                "provider": "doubao",
+            },
+        )
+
+        valid, message = client.validate()
+
+        self.assertTrue(valid, message)
+        self.assertEqual(FakeArk.last_model, "doubao-embedding-large-text-240915")
 
     def test_bare_openai_compatible_base_url_adds_v1(self):
         self.llm_client.LLMClient(

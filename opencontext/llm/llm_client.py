@@ -23,6 +23,10 @@ from opencontext.monitoring import record_processing_stage
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+DOUBAO_EMBEDDING_MODEL_ALIASES = {
+    "doubao-embedding-large": "doubao-embedding-large-text-240915",
+    "doubao-embedding-large-text": "doubao-embedding-large-text-240915",
+}
 
 
 def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
@@ -59,9 +63,9 @@ class LLMClient:
     def __init__(self, llm_type: LLMType, config: Dict[str, Any]):
         self.llm_type = llm_type
         self.config = config
-        self.model = config.get("model")
         self.timeout = config.get("timeout", 300)
         self.provider = (config.get("provider") or LLMProvider.OPENAI.value).lower()
+        self.model = self._normalize_provider_model(config.get("model"))
         self.base_url = self._normalize_provider_base_url(config.get("base_url", ""))
         self.api_key = config.get("api_key") or (
             "not-needed" if self.provider == LLMProvider.CUSTOM.value else ""
@@ -86,6 +90,14 @@ class LLMClient:
         if self._uses_aliyun_embedding_api():
             return self._normalize_aliyun_embedding_url(base_url)
         return _normalize_base_url(base_url, self.llm_type)
+
+    def _normalize_provider_model(self, model: str) -> str:
+        normalized_model = (model or "").strip()
+        if self.provider == LLMProvider.DOUBAO.value and self.llm_type == LLMType.EMBEDDING:
+            return DOUBAO_EMBEDDING_MODEL_ALIASES.get(
+                normalized_model.lower(), normalized_model
+            )
+        return normalized_model
 
     @staticmethod
     def _normalize_aliyun_embedding_url(base_url: str) -> str:
@@ -526,20 +538,24 @@ class LLMClient:
             if self.llm_type == LLMType.CHAT:
                 # Test with an image input - 20x20 pixel PNG with clear red square pattern
                 # This is a small but visible test image to validate vision capabilities
-                # tiny_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAMElEQVR42mP8z8DwHwMxgImBQjDwBo4aNWrUqFGjRlEEhtEwHDVq1KhRo0aNGgUAAN0/Af9dX6MgAAAAAElFTkSuQmCC"
-                # messages = [
-                #     {
-                #         "role": "user",
-                #         "content": [
-                #             {"type": "text", "text": "Hi"},
-                #             {
-                #                 "type": "image_url",
-                #                 "image_url": {"url": f"data:image/png;base64,{tiny_image_base64}"},
-                #             },
-                #         ],
-                #     }
-                # ]
-                messages = [{"role": "user", "content": "Hi"}]
+                tiny_image_base64 = (
+                    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAMElEQVR42mP8z8DwHwMxg"
+                    "ImBQjDwBo4aNWrUqFGjRlEEhtEwHDVq1KhRo0aNGgUAAN0/Af9dX6MgAAAAAElFTkSuQmCC"
+                )
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Hi"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{tiny_image_base64}"
+                                },
+                            },
+                        ],
+                    }
+                ]
                 response = self.client.chat.completions.create(model=self.model, messages=messages)
                 if response.choices and len(response.choices) > 0:
                     return True, "Chat model validation successful"
