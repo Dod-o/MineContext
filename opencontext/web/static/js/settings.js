@@ -219,6 +219,7 @@ async function loadProcessingSettings() {
 
             document.getElementById('screenshot_proc_enabled').checked = proc.screenshot_processor?.enabled !== false;
             document.getElementById('screenshot_batch_size').value = proc.screenshot_processor?.batch_size || 20;
+            document.getElementById('screenshot_batch_timeout').value = proc.screenshot_processor?.batch_timeout || 10;
             document.getElementById('screenshot_max_size').value = proc.screenshot_processor?.max_image_size || 1920;
 
             document.getElementById('merger_enabled').checked = proc.context_merger?.enabled === true;
@@ -243,6 +244,7 @@ document.getElementById('processingForm')?.addEventListener('submit', async (e) 
             screenshot_processor: {
                 enabled: document.getElementById('screenshot_proc_enabled').checked,
                 batch_size: parseInt(document.getElementById('screenshot_batch_size').value),
+                batch_timeout: parseInt(document.getElementById('screenshot_batch_timeout').value),
                 max_image_size: parseInt(document.getElementById('screenshot_max_size').value)
             },
             context_merger: {

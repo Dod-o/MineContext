@@ -267,6 +267,11 @@
                             <input type="number" class="form-control" id="screenshot_batch_size" min="1" max="100">
                         </div>
                         <div class="mb-3">
+                            <label for="screenshot_batch_timeout" class="form-label">批处理超时（秒）</label>
+                            <input type="number" class="form-control" id="screenshot_batch_timeout" min="1" max="300">
+                            <div class="form-text">即使没有达到批处理大小，也会在该时间后处理当前截图。</div>
+                        </div>
+                        <div class="mb-3">
                             <label for="screenshot_max_size" class="form-label">最大图片尺寸</label>
                             <input type="number" class="form-control" id="screenshot_max_size" min="100" max="4096">
                         </div>
