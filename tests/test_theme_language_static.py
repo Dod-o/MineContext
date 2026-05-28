@@ -22,6 +22,16 @@ class ThemeLanguageStaticTest(unittest.TestCase):
         self.assertIn("export type AppLanguage = 'system' | 'en' | 'zh'", runtime_settings)
         self.assertIn("resolveAppLanguage", runtime_settings)
 
+    def test_dark_theme_is_applied_to_electron_and_renderer(self):
+        theme_hook = THEME_HOOK.read_text(encoding="utf-8")
+        theme_service = THEME_SERVICE.read_text(encoding="utf-8")
+
+        self.assertIn("document.body.setAttribute('arco-theme'", theme_hook)
+        self.assertIn("document.documentElement.classList.toggle('dark'", theme_hook)
+        self.assertIn("document.documentElement.style.colorScheme", theme_hook)
+        self.assertIn("nativeTheme.themeSource", theme_service)
+        self.assertIn("IpcChannel.ThemeUpdated", theme_service)
+
 
 if __name__ == "__main__":
     unittest.main()
