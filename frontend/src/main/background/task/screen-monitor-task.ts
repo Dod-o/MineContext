@@ -17,6 +17,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat'
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter'
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore'
 import { ScheduleNextTask } from './schedule-next-task'
+import { isScreenSaverActive } from '../../utils/screen-saver'
 
 dayjs.extend(isBetween)
 dayjs.extend(customParseFormat)
@@ -257,6 +258,11 @@ class ScreenMonitorTask extends ScheduleNextTask {
     }
   }
   private shouldSkipCaptureForIdleState() {
+    if (isScreenSaverActive()) {
+      logger.info('Skipping screen capture while the screen saver is active')
+      return true
+    }
+
     const idleState = powerMonitor.getSystemIdleState(IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS)
     if (idleState === 'idle' || idleState === 'locked') {
       logger.info(`Skipping screen capture while system is ${idleState}`)
