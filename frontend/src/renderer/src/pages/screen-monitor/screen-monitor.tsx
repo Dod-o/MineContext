@@ -27,7 +27,7 @@ import { IpcChannel } from '@shared/IpcChannel'
 import type { RecordingStats } from './components/recording-stats-card'
 import { CaptureSource } from '@interface/common/source'
 import { getModelInfo, validateModelSettingsAPI } from '@renderer/services/Settings'
-import { normalizeScreenSettings, type ScreenSettings } from '@renderer/store/setting'
+import { normalizeScreenSettings, type CaptureTargetMode, type ScreenSettings } from '@renderer/store/setting'
 
 const logger = getLogger('ScreenMonitor')
 type ApiConnectionStatus = 'unknown' | 'checking' | 'connected' | 'error'
@@ -81,6 +81,7 @@ const ScreenMonitor: React.FC = () => {
   const navigate = useNavigate()
   const {
     recordInterval,
+    captureTargetMode,
     recordingHours,
     enableRecordingHours,
     applyToDays,
@@ -95,7 +96,8 @@ const ScreenMonitor: React.FC = () => {
     setExcludedAppPatterns,
     setManualCaptureShortcutEnabled,
     setManualCaptureShortcut,
-    setAdaptiveCapture
+    setAdaptiveCapture,
+    setCaptureTargetMode
   } = useSetting()
   const {
     currentSession,
@@ -144,6 +146,7 @@ const ScreenMonitor: React.FC = () => {
 
   // Settings form state
   const [tempRecordInterval, setTempRecordInterval] = useState(recordInterval)
+  const [tempCaptureTargetMode, setTempCaptureTargetMode] = useState<CaptureTargetMode>(captureTargetMode)
   const [tempEnableRecordingHours, setTempEnableRecordingHours] = useState(enableRecordingHours)
   const [tempRecordingHours, setTempRecordingHours] = useState<[string, string]>(recordingHours as [string, string])
   const [tempApplyToDays, setTempApplyToDays] = useState(applyToDays)
@@ -156,6 +159,7 @@ const ScreenMonitor: React.FC = () => {
   const screenSettingsRef = useRef<ScreenSettings>(
     normalizeScreenSettings({
       recordInterval,
+      captureTargetMode,
       recordingHours,
       enableRecordingHours,
       applyToDays,
@@ -169,6 +173,7 @@ const ScreenMonitor: React.FC = () => {
   useEffect(() => {
     screenSettingsRef.current = normalizeScreenSettings({
       recordInterval,
+      captureTargetMode,
       recordingHours,
       enableRecordingHours,
       applyToDays,
@@ -179,6 +184,7 @@ const ScreenMonitor: React.FC = () => {
     })
   }, [
     recordInterval,
+    captureTargetMode,
     recordingHours,
     enableRecordingHours,
     applyToDays,
@@ -512,6 +518,7 @@ const ScreenMonitor: React.FC = () => {
 
   const handleCancelSettings = useMemoizedFn(() => {
     setTempRecordInterval(recordInterval)
+    setTempCaptureTargetMode(captureTargetMode)
     setTempEnableRecordingHours(enableRecordingHours)
     setTempRecordingHours(recordingHours as [string, string])
     setTempApplyToDays(applyToDays)
@@ -526,6 +533,7 @@ const ScreenMonitor: React.FC = () => {
   const handleSaveSettings = useMemoizedFn(async () => {
     const nextSettings = normalizeScreenSettings({
       recordInterval: tempRecordInterval,
+      captureTargetMode: tempCaptureTargetMode,
       enableRecordingHours: tempEnableRecordingHours,
       recordingHours: tempRecordingHours,
       applyToDays: tempApplyToDays,
@@ -537,6 +545,7 @@ const ScreenMonitor: React.FC = () => {
 
     screenSettingsRef.current = nextSettings
     setRecordInterval(nextSettings.recordInterval)
+    setCaptureTargetMode(nextSettings.captureTargetMode)
     setEnableRecordingHours(nextSettings.enableRecordingHours)
     setRecordingHours(nextSettings.recordingHours)
     setApplyToDays(nextSettings.applyToDays)
@@ -653,7 +662,10 @@ const ScreenMonitor: React.FC = () => {
   // Tips: The biggest problem with using Form for management is that when the user does not select any screen or window, it will cause the save to fail
   const handleSave = useMemoizedFn(async () => {
     const values = form.getFieldsValue()
-    if (![...(values.screenSources || []), ...(values.windowSources || [])].length) {
+    if (
+      tempCaptureTargetMode === 'selected' &&
+      ![...(values.screenSources || []), ...(values.windowSources || [])].length
+    ) {
       Message.info('Please select at least one screen or window')
       return
     }
@@ -673,6 +685,7 @@ const ScreenMonitor: React.FC = () => {
     if (settingSources.state === 'hasData' && sources.state === 'hasData' && shouldSyncSettings) {
       entry()
       setTempRecordInterval(recordInterval)
+      setTempCaptureTargetMode(captureTargetMode)
       setTempEnableRecordingHours(enableRecordingHours)
       setTempRecordingHours(recordingHours as [string, string])
       setTempApplyToDays(applyToDays)
@@ -761,6 +774,7 @@ const ScreenMonitor: React.FC = () => {
           appAllSources={selectableWindowSources}
           applicationVisible={applicationVisible}
           tempRecordInterval={tempRecordInterval}
+          tempCaptureTargetMode={tempCaptureTargetMode}
           tempEnableRecordingHours={tempEnableRecordingHours}
           tempRecordingHours={tempRecordingHours}
           tempApplyToDays={tempApplyToDays}
@@ -772,6 +786,7 @@ const ScreenMonitor: React.FC = () => {
           onSave={handleSave}
           onSetApplicationVisible={setApplicationVisible}
           onSetTempRecordInterval={setTempRecordInterval}
+          onSetTempCaptureTargetMode={setTempCaptureTargetMode}
           onSetTempEnableRecordingHours={setTempEnableRecordingHours}
           onSetTempRecordingHours={setTempRecordingHours}
           onSetTempApplyToDays={setTempApplyToDays}

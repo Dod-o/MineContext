@@ -2,6 +2,7 @@ export interface CaptureSource {
   id: string
   name: string
   type: 'screen' | 'window'
+  displayId?: string
   thumbnail: string | null
   appIcon: string | null
   isVisible: boolean

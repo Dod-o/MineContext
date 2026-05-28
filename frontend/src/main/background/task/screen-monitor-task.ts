@@ -1,7 +1,7 @@
 import { normalizeScreenSettings, type ScreenSettings } from '@shared/screen-settings'
 import { CaptureSource } from '@interface/common/source'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
-import { BrowserWindow, globalShortcut, ipcMain, powerMonitor } from 'electron'
+import { BrowserWindow, globalShortcut, ipcMain, powerMonitor, screen as electronScreen } from 'electron'
 import { get, pick, uniqBy } from 'lodash'
 import screenshotService from '../../services/ScreenshotService'
 import { AutoRefreshCache } from './cache-value'
@@ -268,6 +268,56 @@ class ScreenMonitorTask extends ScheduleNextTask {
     return normalizeScreenSettings(this.modelConfig)
   }
 
+  private getActiveDisplayId() {
+    try {
+      const cursorPoint = electronScreen.getCursorScreenPoint()
+      const activeDisplay = electronScreen.getDisplayNearestPoint(cursorPoint)
+      return activeDisplay?.id ? String(activeDisplay.id) : ''
+    } catch (error) {
+      logger.error('Failed to resolve active display', error)
+      return ''
+    }
+  }
+
+  private resolveActiveScreenSource(visibleSources: CaptureSource[]) {
+    const visibleScreens = visibleSources.filter((source) => source.isVisible && source.type === 'screen')
+    if (visibleScreens.length === 0) {
+      return []
+    }
+
+    const activeDisplayId = this.getActiveDisplayId()
+    if (activeDisplayId) {
+      const displayIdMatch = visibleScreens.find((source) => source.displayId === activeDisplayId)
+      if (displayIdMatch) {
+        return [displayIdMatch]
+      }
+
+      const sourceIdMatch = visibleScreens.find((source) => source.id.includes(activeDisplayId))
+      if (sourceIdMatch) {
+        return [sourceIdMatch]
+      }
+
+      const activeDisplayIndex = electronScreen
+        .getAllDisplays()
+        .findIndex((display) => String(display.id) === activeDisplayId)
+      if (activeDisplayIndex >= 0 && visibleScreens[activeDisplayIndex]) {
+        return [visibleScreens[activeDisplayIndex]]
+      }
+    }
+
+    logger.warn('Active display could not be matched to a capture source; falling back to the first visible screen')
+    return [visibleScreens[0]]
+  }
+
+  private async resolveCaptureSourcesForSettings(visibleSources: CaptureSource[]) {
+    const settings = this.getEffectiveSettings()
+    if (settings.captureTargetMode === 'active-screen') {
+      return this.resolveActiveScreenSource(visibleSources)
+    }
+
+    return this.resolveSelectedSourcesForCapture(visibleSources)
+  }
+
   private getExcludedAppPatterns(): string[] {
     return this.getEffectiveSettings().excludedAppPatterns.map((pattern) => pattern.toLowerCase())
   }
@@ -385,6 +435,12 @@ class ScreenMonitorTask extends ScheduleNextTask {
   }
 
   private getAdaptiveCaptureSignature(visibleSources: CaptureSource[]) {
+    const settings = this.getEffectiveSettings()
+    if (settings.captureTargetMode === 'active-screen') {
+      const source = this.resolveActiveScreenSource(visibleSources)[0]
+      return source ? `${source.type}:${source.id}:${source.name || ''}` : ''
+    }
+
     const selectedIds = new Set(this.appInfo.map((source) => source.id))
     const selectedNames = new Set(this.appInfo.map((source) => source.name?.toLowerCase()).filter(Boolean))
     const hasSelection = selectedIds.size > 0 || selectedNames.size > 0
@@ -513,9 +569,9 @@ class ScreenMonitorTask extends ScheduleNextTask {
         return
       }
 
-      const sources = await this.resolveSelectedSourcesForCapture(capturableVisibleSources)
+      const sources = await this.resolveCaptureSourcesForSettings(capturableVisibleSources)
       if (sources.length === 0) {
-        logger.warn('screen monitor selected sources are not currently capturable')
+        logger.warn('screen monitor capture sources are not currently capturable')
         return
       }
       logger.debug(
@@ -543,9 +599,10 @@ class ScreenMonitorTask extends ScheduleNextTask {
       }
 
       const capturableVisibleSources = this.filterExcludedSources(visibleSources || [])
-      const configuredSources = await this.resolveSelectedSourcesForCapture(capturableVisibleSources)
+      const settings = this.getEffectiveSettings()
+      const configuredSources = await this.resolveCaptureSourcesForSettings(capturableVisibleSources)
       const fallbackSources =
-        this.appInfo.length === 0
+        settings.captureTargetMode === 'selected' && this.appInfo.length === 0
           ? capturableVisibleSources.filter((source) => source.isVisible && source.type === 'screen').slice(0, 1)
           : []
       const sources = configuredSources.length > 0 ? configuredSources : fallbackSources

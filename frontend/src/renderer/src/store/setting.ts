@@ -14,6 +14,7 @@ export type {
   AdaptiveCaptureRuleSetting,
   AdaptiveCaptureSettings,
   ApplyToDays,
+  CaptureTargetMode,
   PartialAdaptiveCaptureSettings,
   PartialScreenSettings,
   ScreenSettings

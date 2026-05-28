@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export type ApplyToDays = 'weekday' | 'everyday'
+export type CaptureTargetMode = 'selected' | 'active-screen'
 
 export interface AdaptiveCaptureRuleSetting {
   enabled: boolean
@@ -17,6 +18,7 @@ export interface AdaptiveCaptureSettings {
 
 export interface ScreenSettings {
   recordInterval: number
+  captureTargetMode: CaptureTargetMode
   enableRecordingHours: boolean
   recordingHours: [string, string]
   applyToDays: ApplyToDays
@@ -55,6 +57,7 @@ export const defaultAdaptiveCaptureSettings: AdaptiveCaptureSettings = {
 
 export const defaultScreenSettings: ScreenSettings = {
   recordInterval: 15,
+  captureTargetMode: 'selected',
   enableRecordingHours: false,
   recordingHours: ['08:00:00', '20:00:00'],
   applyToDays: 'weekday',
@@ -86,9 +89,12 @@ export function normalizeAdaptiveCaptureSettings(
 }
 
 export function normalizeScreenSettings(settings?: PartialScreenSettings): ScreenSettings {
+  const captureTargetMode = settings?.captureTargetMode === 'active-screen' ? 'active-screen' : 'selected'
+
   return {
     ...defaultScreenSettings,
     ...(settings || {}),
+    captureTargetMode,
     excludedAppPatterns: Array.isArray(settings?.excludedAppPatterns)
       ? settings.excludedAppPatterns
           .map((pattern) => (typeof pattern === 'string' ? pattern.trim() : ''))

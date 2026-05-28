@@ -6,7 +6,8 @@ import screenIcon from '@renderer/assets/icons/screen.svg'
 import type {
   AdaptiveCaptureRuleSetting,
   AdaptiveCaptureSettings,
-  ApplyToDays
+  ApplyToDays,
+  CaptureTargetMode
 } from '@renderer/store/setting'
 
 interface SettingsModalProps {
@@ -17,6 +18,7 @@ interface SettingsModalProps {
   appAllSources: any[]
   applicationVisible: boolean
   tempRecordInterval: number
+  tempCaptureTargetMode: CaptureTargetMode
   tempEnableRecordingHours: boolean
   tempRecordingHours: [string, string]
   tempApplyToDays: string
@@ -28,6 +30,7 @@ interface SettingsModalProps {
   onSave: () => void
   onSetApplicationVisible: (visible: boolean) => void
   onSetTempRecordInterval: (value: number) => void
+  onSetTempCaptureTargetMode: (value: CaptureTargetMode) => void
   onSetTempEnableRecordingHours: (value: boolean) => void
   onSetTempRecordingHours: (value: [string, string]) => void
   onSetTempApplyToDays: (value: ApplyToDays) => void
@@ -85,6 +88,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   appAllSources,
   applicationVisible,
   tempRecordInterval,
+  tempCaptureTargetMode,
   tempEnableRecordingHours,
   tempRecordingHours,
   tempApplyToDays,
@@ -96,6 +100,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSave,
   onSetApplicationVisible,
   onSetTempRecordInterval,
+  onSetTempCaptureTargetMode,
   onSetTempEnableRecordingHours,
   onSetTempRecordingHours,
   onSetTempApplyToDays,
@@ -151,6 +156,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="!mt-4"
                 formatTooltip={(value) => `${value}s`}
               />
+            </Form.Item>
+            <Form.Item label="Capture target" className="[&_.arco-form-item-label]:!text-xs">
+              <Radio.Group value={tempCaptureTargetMode} onChange={onSetTempCaptureTargetMode}>
+                <Radio value="selected" className="[&_.arco-radio-mask]: !border-[#d7daea]">
+                  Selected sources
+                </Radio>
+                <Radio value="active-screen" className="[&_.arco-radio-mask]: !border-[#d7daea]">
+                  Active screen
+                </Radio>
+              </Radio.Group>
             </Form.Item>
             <Form.Item label="Manual capture shortcut" className="[&_.arco-form-item-label]:!text-xs">
               <div className="flex items-center gap-3">
@@ -210,23 +225,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 Matching window captures are skipped before upload.
               </div>
             </Form.Item>
-            <Form.Item label="Choose what to record" shouldUpdate>
-              {(values) => {
-                const { screenSources = [], windowSources = [] } = values || {}
-                const screenList = screenAllSources?.filter((source) => screenSources.includes(source.id)) || []
-                const windowList = appAllSources?.filter((source) => windowSources.includes(source.id)) || []
-                return (
-                  <Spin loading={sources.state === 'loading'} block>
-                    <Application
-                      value={[...screenList, ...windowList]}
-                      onCancel={() => onSetApplicationVisible(false)}
-                      visible={applicationVisible}
-                      onOk={() => onSetApplicationVisible(true)}
-                    />
-                  </Spin>
-                )
-              }}
-            </Form.Item>
+            {tempCaptureTargetMode === 'selected' && (
+              <Form.Item label="Choose what to record" shouldUpdate>
+                {(values) => {
+                  const { screenSources = [], windowSources = [] } = values || {}
+                  const screenList = screenAllSources?.filter((source) => screenSources.includes(source.id)) || []
+                  const windowList = appAllSources?.filter((source) => windowSources.includes(source.id)) || []
+                  return (
+                    <Spin loading={sources.state === 'loading'} block>
+                      <Application
+                        value={[...screenList, ...windowList]}
+                        onCancel={() => onSetApplicationVisible(false)}
+                        visible={applicationVisible}
+                        onOk={() => onSetApplicationVisible(true)}
+                      />
+                    </Spin>
+                  )
+                }}
+              </Form.Item>
+            )}
             <Form.Item label="Enable recording hours" className="[&_.arco-form-item-label]:!text-xs !mb-0">
               <Switch
                 checked={tempEnableRecordingHours}
@@ -261,7 +278,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <div
             className={clsx(
               'flex flex-col flex-1 border-l border-[#efeff4] max-h-[360px] h-[360px] overflow-x-hidden overflow-y-auto px-[16px]  [&_.arco-checkbox-checked_.arco-checkbox-mask]:!bg-[#000000] [&_.arco-checkbox-checked_.arco-checkbox-mask]:!border-[#000000]',
-              { hidden: !applicationVisible }
+              { hidden: !applicationVisible || tempCaptureTargetMode !== 'selected' }
             )}>
             <div className="text-[15px] leading-[18px] text-[#42464e] mb-[12px] font-medium">Choose what to record</div>
             <div className="[&_.arco-checkbox]:!flex [&_.arco-checkbox]:!items-center">

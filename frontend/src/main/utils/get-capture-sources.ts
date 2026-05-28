@@ -292,6 +292,7 @@ export interface CaptureSource {
   id: string
   name: string
   type: 'screen' | 'window'
+  displayId?: string
   thumbnail: string | null
   appIcon: string | null
   isVisible: boolean
@@ -332,6 +333,7 @@ class CaptureSourcesTools {
           id: source.id,
           name: displayName,
           type: source.display_id ? 'screen' : 'window',
+          displayId: source.display_id || undefined,
           thumbnail: source.thumbnail.toDataURL(),
           appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
           isVisible: true // desktopCapturer only returns visible windows
@@ -1011,10 +1013,13 @@ class CaptureSourcesTools {
         const results = sourceIds.map((id) => {
           let isVisible = false
           let name = 'Unknown'
+          let type: CaptureSource['type'] | undefined
+          let displayId: string | undefined
 
           if (id.startsWith('virtual-window:')) {
             const virtualWindow = parseVirtualWindowId(id)
             if (virtualWindow) {
+              type = 'window'
               name = [virtualWindow.appName, virtualWindow.windowTitle].filter(Boolean).join(' - ')
               const visibleDesktopSource = findMatchingDesktopWindowSource(
                 visibleSources,
@@ -1072,13 +1077,15 @@ class CaptureSourcesTools {
             if (visibleSource) {
               isVisible = true
               name = visibleSource.name
+              type = visibleSource.display_id ? 'screen' : 'window'
+              displayId = visibleSource.display_id || undefined
               logger.info(`Regular window found visible: ${id} -> ${name}`)
             } else {
               logger.info(`Regular window NOT visible: ${id}`)
             }
           }
 
-          return { id, isVisible, name }
+          return { id, isVisible, name, type, displayId }
         })
 
         return { success: true, sources: results }
@@ -1092,6 +1099,10 @@ class CaptureSourcesTools {
         const allVisible = visibleSources.map((s) => ({
           id: s.id,
           name: s.name,
+          type: s.display_id ? 'screen' : 'window',
+          displayId: s.display_id || undefined,
+          thumbnail: null,
+          appIcon: null,
           isVisible: true
         }))
 

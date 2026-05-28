@@ -8,7 +8,8 @@ import {
   normalizeScreenSettings,
   setScreenSettings as setScreenSettingsAction,
   type AdaptiveCaptureSettings,
-  type ApplyToDays
+  type ApplyToDays,
+  type CaptureTargetMode
 } from '@renderer/store/setting'
 
 export const useSetting = () => {
@@ -18,6 +19,7 @@ export const useSetting = () => {
 
   const {
     recordInterval,
+    captureTargetMode,
     recordingHours,
     enableRecordingHours,
     applyToDays,
@@ -55,6 +57,13 @@ export const useSetting = () => {
     [dispatch]
   )
 
+  const setCaptureTargetMode = useCallback(
+    (mode: CaptureTargetMode) => {
+      dispatch(setScreenSettingsAction({ captureTargetMode: mode }))
+    },
+    [dispatch]
+  )
+
   const setManualCaptureShortcutEnabled = useCallback(
     (enabled: boolean) => {
       dispatch(setScreenSettingsAction({ manualCaptureShortcutEnabled: enabled }))
@@ -85,6 +94,7 @@ export const useSetting = () => {
 
   return {
     recordInterval,
+    captureTargetMode,
     recordingHours,
     enableRecordingHours,
     applyToDays,
@@ -93,6 +103,7 @@ export const useSetting = () => {
     manualCaptureShortcut,
     adaptiveCapture,
     setRecordInterval,
+    setCaptureTargetMode,
     setEnableRecordingHours,
     setRecordingHours,
     setApplyToDays,
