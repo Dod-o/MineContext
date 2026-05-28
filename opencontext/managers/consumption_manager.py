@@ -221,8 +221,7 @@ class ConsumptionManager:
 
                 if now >= target_time and self._last_report_date != today:
                     try:
-                        end_time = int(now.timestamp())
-                        start_time = int((now - timedelta(days=1)).timestamp())
+                        start_time, end_time = self._get_daily_report_range(now)
 
                         asyncio.run(self._activity_generator.generate_report(start_time, end_time))
                         # Update last report date to prevent duplicate generation on the same day
@@ -239,6 +238,12 @@ class ConsumptionManager:
                 self._task_timers["report"].start()
 
         check_and_generate_daily_report()
+
+    def _get_daily_report_range(self, now: datetime) -> tuple[int, int]:
+        report_date = (now - timedelta(days=1)).date()
+        start_datetime = datetime.combine(report_date, datetime.min.time())
+        end_datetime = start_datetime + timedelta(days=1)
+        return int(start_datetime.timestamp()), int(end_datetime.timestamp())
 
     def _start_activity_timer(self):
         """Start activity recording timer"""
