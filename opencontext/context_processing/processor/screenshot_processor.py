@@ -169,6 +169,17 @@ class ScreenshotProcessor(BaseContextProcessor):
             return False
         return True
 
+    def _should_process_batch(
+        self, pending_count: int, batch_started_at: Optional[float], now: float
+    ) -> bool:
+        if pending_count <= 0:
+            return False
+        if pending_count >= self._batch_size:
+            return True
+        if batch_started_at is None:
+            return False
+        return (now - batch_started_at) >= self._batch_timeout
+
     def _run_processing_loop(self):
         from opencontext.monitoring import (
             increment_data_count,
@@ -177,7 +188,7 @@ class ScreenshotProcessor(BaseContextProcessor):
         )
         """Background processing loop for handling screenshots in input queue."""
         unprocessed_contexts = []
-        last_process_time = int(time.time())
+        batch_started_at = None
         consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
@@ -188,17 +199,25 @@ class ScreenshotProcessor(BaseContextProcessor):
                     break
                 # Process deduplication
                 unprocessed_contexts.append(raw_context)
-                if (int(time.time()) - last_process_time) < self._batch_timeout * 2 and len(
-                    unprocessed_contexts
-                ) < self._batch_size:
+                if batch_started_at is None:
+                    batch_started_at = time.time()
+                if not self._should_process_batch(
+                    len(unprocessed_contexts), batch_started_at, time.time()
+                ):
                     # logger.info(f"Screenshots in cache: {len(unprocessed_contexts)}")
                     continue
             except queue.Empty:
-                # logger.info("Queue empty, waiting for new data")
-                continue
+                if not self._should_process_batch(
+                    len(unprocessed_contexts), batch_started_at, time.time()
+                ):
+                    # logger.info("Queue empty, waiting for new data")
+                    continue
             except Exception as e:
                 logger.error(f"Unexpected error in processing loop: {e}")
                 time.sleep(1)
+            if not unprocessed_contexts:
+                batch_started_at = None
+                continue
             start_time = time.time()
             increment_data_count("screenshot", count=len(unprocessed_contexts))
             try:
@@ -215,7 +234,7 @@ class ScreenshotProcessor(BaseContextProcessor):
                 consecutive_failures += 1
                 failed_count = len(unprocessed_contexts)
                 unprocessed_contexts.clear()
-                last_process_time = int(time.time())
+                batch_started_at = None
                 backoff_seconds = min(60, 2 ** min(consecutive_failures, 5))
                 logger.warning(
                     f"Dropped {failed_count} failed screenshots and backing off for {backoff_seconds}s "
@@ -243,7 +262,7 @@ class ScreenshotProcessor(BaseContextProcessor):
             except ImportError:
                 pass
             unprocessed_contexts.clear()
-            last_process_time = int(time.time())
+            batch_started_at = None
 
     async def _process_vlm_single(self, raw_context: RawContextProperties) -> List[ProcessedContext]:
         """
