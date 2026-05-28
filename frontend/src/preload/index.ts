@@ -105,6 +105,7 @@ const screenMonitorAPI = {
     ipcRenderer.invoke(IpcChannel.Task_Update_Model_Config, config),
   startTask: () => ipcRenderer.invoke(IpcChannel.Task_Start),
   stopTask: () => ipcRenderer.invoke(IpcChannel.Task_Stop),
+  captureNow: () => ipcRenderer.invoke(IpcChannel.Task_Capture_Now),
   updateCurrentRecordApp: (appInfo: CaptureSource[]) =>
     ipcRenderer.invoke(IpcChannel.Task_Update_Current_Record_App, appInfo),
   checkCanRecord: () => ipcRenderer.invoke(IpcChannel.Task_Check_Can_Record)

@@ -89,6 +89,7 @@ const ScreenMonitor: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
   const [recordingStats, setRecordingStats] = useState<RecordingStats | null>(null)
+  const [captureNowLoading, setCaptureNowLoading] = useState(false)
   const [apiConnectionStatus, setApiConnectionStatus] = useState<ApiConnectionStatus>('unknown')
   const [apiConnectionMessage, setApiConnectionMessage] = useState('')
   const activityPollingRef = useRef<NodeJS.Timeout | null>(null)
@@ -502,6 +503,29 @@ const ScreenMonitor: React.FC = () => {
     await window.screenMonitorAPI.updateCurrentRecordApp([...selectedScreenList, ...windowList])
   })
 
+  const captureNow = useMemoizedFn(async () => {
+    if (captureNowLoading) {
+      return
+    }
+    setCaptureNowLoading(true)
+    try {
+      const result = await window.screenMonitorAPI.captureNow()
+      if (result.success) {
+        Message.success(`Captured ${result.capturedCount} screenshot${result.capturedCount === 1 ? '' : 's'}`)
+        if (isToday) {
+          startActivityPolling()
+          startStatsPolling()
+        }
+      } else {
+        Message.error(result.error || 'Manual screenshot failed')
+      }
+    } catch (error: any) {
+      Message.error(get(error, 'message') || 'Manual screenshot failed')
+    } finally {
+      setCaptureNowLoading(false)
+    }
+  })
+
   // Tips: The biggest problem with using Form for management is that when the user does not select any screen or window, it will cause the save to fail
   const handleSave = useMemoizedFn(async () => {
     const values = form.getFieldsValue()
@@ -548,6 +572,8 @@ const ScreenMonitor: React.FC = () => {
           appAllSources={appAllSources}
           onOpenSettings={openSettings}
           onCheckApiConnection={checkApiConnection}
+          onCaptureNow={captureNow}
+          captureNowLoading={captureNowLoading}
           onStartMonitoring={startMonitoring}
           onStopMonitoring={stopMonitoring}
           onRequestPermission={handleRequestPermission}

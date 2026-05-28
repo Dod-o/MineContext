@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button, Space, Typography, Popover, Tag, Tooltip } from '@arco-design/web-react'
-import { IconPlayArrow, IconSettings, IconRecordStop } from '@arco-design/web-react/icon'
+import { IconCamera, IconPlayArrow, IconSettings, IconRecordStop } from '@arco-design/web-react/icon'
 
 const { Title, Text } = Typography
 
@@ -14,6 +14,8 @@ interface ScreenMonitorHeaderProps {
   appAllSources: any[]
   onOpenSettings: () => void
   onCheckApiConnection: () => void
+  onCaptureNow: () => void
+  captureNowLoading: boolean
   onStartMonitoring: () => void
   onStopMonitoring: () => void
   onRequestPermission: () => void
@@ -29,6 +31,8 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
   appAllSources,
   onOpenSettings,
   onCheckApiConnection,
+  onCaptureNow,
+  captureNowLoading,
   onStartMonitoring,
   onStopMonitoring
 }) => {
@@ -77,6 +81,18 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
                 Settings
               </Button>
             </Popover>
+            <Tooltip content="Capture selected screen or window immediately.">
+              <Button
+                type="outline"
+                icon={<IconCamera />}
+                size="large"
+                loading={captureNowLoading}
+                disabled={!isToday}
+                onClick={onCaptureNow}
+                className="[&_.arco-btn]: !bg-white [&_.arco-btn]: !border-gray-300 [&_.arco-btn]: !text-black [&_.arco-btn:hover]: !bg-gray-50">
+                Capture Now
+              </Button>
+            </Tooltip>
             {!isMonitoring ? (
               <Popover
                 content="Please click the settings button and select your monitoring window or screen."

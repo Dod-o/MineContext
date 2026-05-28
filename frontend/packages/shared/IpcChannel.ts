@@ -338,6 +338,7 @@ export enum IpcChannel {
   Task_Update_Model_Config = 'task:update-model-config',
   Task_Start = 'task:start',
   Task_Stop = 'task:stop',
+  Task_Capture_Now = 'task:capture-now',
   Task_Update_Current_Record_App = 'task:update-current-record-app',
   Task_Check_Can_Record = 'task:check-can-record',
 

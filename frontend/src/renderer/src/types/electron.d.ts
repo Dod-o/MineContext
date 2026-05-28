@@ -71,6 +71,12 @@ interface ScreenMonitorAPI {
     success: boolean
     error?: string
   }>
+  captureNow: () => Promise<{
+    success: boolean
+    capturedCount: number
+    failedCount: number
+    error?: string
+  }>
   checkCanRecord: () => Promise<{
     canRecord: boolean
     status: string

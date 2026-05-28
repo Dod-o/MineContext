@@ -71,6 +71,10 @@ class ScreenMonitorTask extends ScheduleNextTask {
       ScreenMonitorTask.globalStatus = 'stopped'
       this.stopTask()
     })
+    ipcMain.handle(IpcChannel.Task_Capture_Now, async () => {
+      logger.info('render notify ScreenMonitorTask capture now')
+      return this.captureNow()
+    })
     ipcMain.handle(IpcChannel.Task_Check_Can_Record, () => {
       return {
         canRecord: this.checkCanRecord(),
@@ -136,14 +140,17 @@ class ScreenMonitorTask extends ScheduleNextTask {
       return []
     }
   }
-  private async handleScreenshotTask(source: CaptureSource, createTime: Dayjs) {
+  private async handleScreenshotTask(source: CaptureSource, createTime: Dayjs, captureMode: 'scheduled' | 'manual' = 'scheduled') {
     const res = await screenshotService.takeScreenshot(source.id, createTime)
 
     if (res.success) {
       logger.info(`Screenshot taken successfully for source ${source.id}`)
       const url = get(res, 'screenshotInfo.url') || ''
       if (url) {
-        await this.uploadImage(url, source.type, createTime)
+        const uploaded = await this.uploadImage(url, source.type, createTime, captureMode)
+        if (!uploaded) {
+          throw new Error('Screenshot upload failed')
+        }
       }
     } else {
       throw new Error(res.error || 'Unknown error')
@@ -235,6 +242,37 @@ class ScreenMonitorTask extends ScheduleNextTask {
       logger.error('startScreenMonitor error; recording will retry on the next interval', error)
     }
   }
+  public async captureNow() {
+    try {
+      let visibleSources = this.configCache?.get()
+      if (!visibleSources || visibleSources.length === 0) {
+        visibleSources = await this.getVisibleSourcesUseCache()
+      }
+
+      const configuredSources = this.resolveSourcesForCapture(visibleSources)
+      const fallbackSources = visibleSources.filter((source) => source.isVisible && source.type === 'screen').slice(0, 1)
+      const sources = configuredSources.length > 0 ? configuredSources : fallbackSources
+      if (sources.length === 0) {
+        return { success: false, capturedCount: 0, failedCount: 0, error: 'No capturable screen or window found' }
+      }
+
+      const createTime = dayjs()
+      const results = await Promise.allSettled(
+        sources.map((source) => this.handleScreenshotTask(source, createTime, 'manual'))
+      )
+      const capturedCount = results.filter((result) => result.status === 'fulfilled').length
+      const failedCount = results.length - capturedCount
+      return {
+        success: capturedCount > 0,
+        capturedCount,
+        failedCount,
+        error: capturedCount > 0 ? undefined : 'Manual screenshot failed'
+      }
+    } catch (error: any) {
+      logger.error('captureNow error', error)
+      return { success: false, capturedCount: 0, failedCount: 0, error: error.message }
+    }
+  }
   private broadcastStatus() {
     BrowserWindow.getAllWindows().forEach((window) => {
       window.webContents.send(IpcServerPushChannel.PushScreenMonitorStatus, this.status)
@@ -250,25 +288,34 @@ class ScreenMonitorTask extends ScheduleNextTask {
     ipcMain.removeHandler(IpcChannel.Task_Update_Model_Config)
     ipcMain.removeHandler(IpcChannel.Task_Start)
     ipcMain.removeHandler(IpcChannel.Task_Stop)
+    ipcMain.removeHandler(IpcChannel.Task_Capture_Now)
     ipcMain.removeHandler(IpcChannel.Task_Update_Current_Record_App)
   }
 
-  private async uploadImage(url: string, type: CaptureSource['type'], createTime: Dayjs) {
+  private async uploadImage(
+    url: string,
+    type: CaptureSource['type'],
+    createTime: Dayjs,
+    captureMode: 'scheduled' | 'manual'
+  ): Promise<boolean> {
     try {
       const data = {
         path: url,
         window: type === 'screen' ? 'screen' : '',
         create_time: createTime.format('YYYY-MM-DD HH:mm:ss'),
-        app: type === 'window' ? 'window' : ''
+        source: captureMode === 'manual' ? `manual-${type}` : type
       }
       const res = await axios.post(`http://127.0.0.1:${getBackendPort()}/api/add_screenshot`, data)
       if (res.status === 200) {
         logger.info('Screenshot uploaded successfully')
+        return true
       } else {
         logger.error('Screenshot upload failed', res.status)
+        return false
       }
     } catch (error) {
       logger.error('Failed to upload screenshot:', error)
+      return false
     }
   }
 
