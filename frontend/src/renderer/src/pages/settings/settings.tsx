@@ -224,6 +224,23 @@ const Settings: FC<SettingsProps> = (props) => {
       Message.error(errMsg)
     }
   })
+  const getValidationMessage = (error: any) => {
+    if (!error) {
+      return 'Please complete the required model settings'
+    }
+    if (typeof error === 'string') {
+      return error
+    }
+    if (error.message) {
+      return error.message
+    }
+
+    const firstFieldError = Object.values(error)[0] as any
+    if (Array.isArray(firstFieldError)) {
+      return firstFieldError[0]?.message || firstFieldError[0] || 'Please complete the required model settings'
+    }
+    return firstFieldError?.message || 'Please complete the required model settings'
+  }
   const submit = useMemoizedFn(async () => {
     try {
       await form.validate()
@@ -258,7 +275,9 @@ const Settings: FC<SettingsProps> = (props) => {
           }
 
       updateModelSettings(params as unknown as ModelConfigProps)
-    } catch (error: any) {}
+    } catch (error: any) {
+      Message.error(getValidationMessage(error))
+    }
   })
 
   useMount(() => {
