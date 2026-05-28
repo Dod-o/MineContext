@@ -23,6 +23,7 @@ from .routes import (
     documents,
     events,
     health,
+    media,
     monitoring,
     screenshots,
     settings,
@@ -47,6 +48,7 @@ router.include_router(context.router)
 router.include_router(content_generation.router)
 router.include_router(screenshots.router)
 router.include_router(debug.router)
+router.include_router(media.router)
 router.include_router(monitoring.router)
 router.include_router(vaults.router)
 router.include_router(agent_chat.router)
