@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Beijing Volcano Engine Technology Co., Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   ChatMessage,
   ChatStreamRequest,
@@ -43,12 +43,7 @@ export const useChatStream = () => {
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null)
   const currentStreamingId = useRef<string | null>(null)
 
-  // Cleanup function
-  useEffect(() => {
-    return () => {
-      chatStreamService.abortStream()
-    }
-  }, [])
+  // Keep the singleton stream alive when the assistant pane unmounts; explicit stop/new chat still aborts it.
 
   // Send message
   const sendMessage = useCallback(
