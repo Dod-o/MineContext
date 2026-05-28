@@ -78,7 +78,12 @@
                         </div>
                         <div class="mb-3">
                             <label for="modelId" class="form-label">模型 ID</label>
-                            <input type="text" class="form-control" id="modelId" placeholder="例如: gpt-5" required>
+                            <input type="text" class="form-control" id="modelId" list="modelIdSuggestions" placeholder="例如: gpt-5-nano" required>
+                            <datalist id="modelIdSuggestions">
+                                <option value="gpt-5-nano"></option>
+                                <option value="gpt-5-mini"></option>
+                                <option value="gpt-5"></option>
+                            </datalist>
                         </div>
                         <div class="mb-3">
                             <label for="baseUrl" class="form-label">Base URL</label>
@@ -92,7 +97,7 @@
                         <h4 class="mt-4">Embedding 模型配置</h4>
                         <div class="mb-3">
                             <label for="embeddingModelId" class="form-label">Embedding 模型 ID</label>
-                            <input type="text" class="form-control" id="embeddingModelId" placeholder="例如: text-embedding-ada-002" required>
+                            <input type="text" class="form-control" id="embeddingModelId" placeholder="例如: text-embedding-3-large" required>
                         </div>
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="separateEmbedding" onchange="toggleEmbeddingConfig()">
