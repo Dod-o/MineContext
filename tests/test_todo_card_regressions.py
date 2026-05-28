@@ -26,6 +26,15 @@ class TodoCardRegressionTest(unittest.TestCase):
         self.assertIn("urgency: TaskUrgency.Low", source)
         self.assertIn("setStatus(TODO_LIST_STATUS.Create)", source)
 
+    def test_batch_todo_controls_are_available(self):
+        source = TODO_CARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("const handleDeleteSelectedTasks", source)
+        self.assertIn("const handleToggleBatchMode", source)
+        self.assertIn("IconSelectAll", source)
+        self.assertIn("{isBatchMode ? 'Cancel' : 'Batch'}", source)
+        self.assertIn("selectedVisibleTaskIds.length === 0", source)
+
 
 if __name__ == "__main__":
     unittest.main()
