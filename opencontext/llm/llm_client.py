@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 
 
 def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
-    normalized = base_url.rstrip("/")
+    normalized = (base_url or "").strip().rstrip("/")
     endpoint_suffixes = {
         LLMType.CHAT: ("/chat/completions",),
         LLMType.EMBEDDING: ("/embeddings",),
@@ -89,7 +89,7 @@ class LLMClient:
 
     @staticmethod
     def _normalize_aliyun_embedding_url(base_url: str) -> str:
-        normalized = base_url.rstrip("/")
+        normalized = (base_url or "").strip().rstrip("/")
         default_path = "/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
         parsed = urlsplit(normalized)
         if parsed.scheme and parsed.netloc and parsed.path in ("", "/"):
