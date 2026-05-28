@@ -55,10 +55,15 @@ class ReportGeneratorTest(unittest.TestCase):
     def test_daily_report_title_uses_start_time_date(self):
         generator = ReportGenerator.__new__(ReportGenerator)
         start_time = int(datetime.datetime(2026, 5, 19, 0, 0, 0).timestamp())
+        end_time = int(datetime.datetime(2026, 5, 20, 0, 0, 0).timestamp())
 
         self.assertEqual(
             generator._build_daily_report_title(start_time),
             "Daily Report - 2026-05-19",
+        )
+        self.assertNotIn(
+            datetime.datetime.fromtimestamp(end_time).strftime("%Y-%m-%d"),
+            generator._build_daily_report_title(start_time),
         )
 
     def test_no_activity_report_message_is_stable(self):
