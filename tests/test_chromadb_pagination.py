@@ -87,6 +87,7 @@ class ChromaDBPaginationTest(unittest.TestCase):
         )
 
         self.assertEqual(result["activity_context"], ["native-1", "native-2"])
+        self.assertEqual(len(collection.calls), 1)
         self.assertEqual(collection.calls[0]["limit"], 2)
         self.assertEqual(collection.calls[0]["offset"], 3)
 
