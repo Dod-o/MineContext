@@ -7,8 +7,12 @@
 OpenContext module: llm_client
 """
 
+import asyncio
+import json
 from enum import Enum
 from typing import Any, Dict, List
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from urllib.parse import urlsplit, urlunsplit
 
 from openai import APIError, AsyncOpenAI, OpenAI
@@ -42,6 +46,7 @@ def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
 class LLMProvider(Enum):
     OPENAI = "openai"
     DOUBAO = "doubao"
+    ALIYUN = "aliyun"
     CUSTOM = "custom"
 
 
@@ -55,9 +60,9 @@ class LLMClient:
         self.llm_type = llm_type
         self.config = config
         self.model = config.get("model")
-        self.base_url = _normalize_base_url(config.get("base_url", ""), llm_type)
         self.timeout = config.get("timeout", 300)
         self.provider = (config.get("provider") or LLMProvider.OPENAI.value).lower()
+        self.base_url = self._normalize_provider_base_url(config.get("base_url", ""))
         self.api_key = config.get("api_key") or (
             "not-needed" if self.provider == LLMProvider.CUSTOM.value else ""
         )
@@ -65,16 +70,37 @@ class LLMClient:
             raise ValueError("Base URL and model must be provided")
         if not self.api_key:
             raise ValueError("API key must be provided")
+        self.client = None
+        self.async_client = None
+        if self._uses_aliyun_embedding_api():
+            return
+        if self._uses_doubao_embedding_api():
+            self.client = Ark(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+            return
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
         self.async_client = AsyncOpenAI(
             api_key=self.api_key, base_url=self.base_url, timeout=self.timeout
         )
-        if self._uses_doubao_embedding_api():
-            self.client = Ark(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
-            self.async_client = None
+
+    def _normalize_provider_base_url(self, base_url: str) -> str:
+        if self._uses_aliyun_embedding_api():
+            return self._normalize_aliyun_embedding_url(base_url)
+        return _normalize_base_url(base_url, self.llm_type)
+
+    @staticmethod
+    def _normalize_aliyun_embedding_url(base_url: str) -> str:
+        normalized = base_url.rstrip("/")
+        default_path = "/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+        parsed = urlsplit(normalized)
+        if parsed.scheme and parsed.netloc and parsed.path in ("", "/"):
+            return urlunsplit((parsed.scheme, parsed.netloc, default_path, parsed.query, parsed.fragment))
+        return normalized
 
     def _uses_doubao_embedding_api(self) -> bool:
         return self.provider == LLMProvider.DOUBAO.value and self.llm_type == LLMType.EMBEDDING
+
+    def _uses_aliyun_embedding_api(self) -> bool:
+        return self.provider == LLMProvider.ALIYUN.value and self.llm_type == LLMType.EMBEDDING
 
     def generate(self, prompt: str, **kwargs) -> str:
         messages = [{"role": "user", "content": prompt}]
@@ -291,97 +317,115 @@ class LLMClient:
             logger.error(f"OpenAI API async stream error: {e}")
             raise
 
+    def _request_aliyun_embedding(self, text: str) -> tuple[List[float], Any]:
+        payload = {
+            "model": self.model,
+            "input": {
+                "contents": [
+                    {
+                        "text": text,
+                    }
+                ]
+            },
+        }
+        request = urllib_request.Request(
+            self.base_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib_request.urlopen(request, timeout=self.timeout) as response:
+                body = response.read().decode("utf-8")
+        except urllib_error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Aliyun embedding API error {exc.code}: {error_body}") from exc
+
+        data = json.loads(body)
+        embeddings = data.get("output", {}).get("embeddings", [])
+        if not embeddings or not embeddings[0].get("embedding"):
+            raise RuntimeError("Aliyun embedding API returned empty embedding")
+        return embeddings[0]["embedding"], data.get("usage")
+
+    def _record_embedding_usage(self, usage: Any) -> None:
+        if not usage:
+            return
+        try:
+            from opencontext.monitoring import record_token_usage
+
+            if isinstance(usage, dict):
+                prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens", 0))
+                total_tokens = usage.get("total_tokens", prompt_tokens)
+            else:
+                prompt_tokens = usage.prompt_tokens
+                total_tokens = usage.total_tokens
+
+            record_token_usage(
+                model=self.model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=0,
+                total_tokens=total_tokens,
+            )
+        except ImportError:
+            pass
+
+    def _fit_embedding_output_dim(self, embedding: List[float], output_dim: int) -> List[float]:
+        if output_dim and len(embedding) > output_dim:
+            import math
+
+            embedding = embedding[:output_dim]
+            norm = math.sqrt(sum(x**2 for x in embedding))
+            if norm > 0:
+                embedding = [x / norm for x in embedding]
+        return embedding
+
     def _request_embedding(self, text: str, **kwargs) -> List[float]:
         try:
-            if self._uses_doubao_embedding_api():
+            if self._uses_aliyun_embedding_api():
+                embedding, usage = self._request_aliyun_embedding(text)
+            elif self._uses_doubao_embedding_api():
                 response = self.client.multimodal_embeddings.create(
                     model=self.model, input=[{"type": "text", "text": text}]
                 )
                 embedding = response.data.embedding
+                usage = response.usage if hasattr(response, "usage") else None
             else:
                 response = self.client.embeddings.create(model=self.model, input=[text])
                 embedding = response.data[0].embedding
+                usage = response.usage if hasattr(response, "usage") else None
 
-            # Record token usage
-            if hasattr(response, "usage") and response.usage:
-                try:
-                    from opencontext.monitoring import record_token_usage
-
-                    usage = response.usage
-                    if isinstance(usage, dict):
-                        prompt_tokens = usage.get("prompt_tokens", 0)
-                        total_tokens = usage.get("total_tokens", 0)
-                    else:
-                        prompt_tokens = usage.prompt_tokens
-                        total_tokens = usage.total_tokens
-
-                    record_token_usage(
-                        model=self.model,
-                        prompt_tokens=prompt_tokens,
-                        completion_tokens=0,  # embedding has no completion tokens
-                        total_tokens=total_tokens,
-                    )
-                except ImportError:
-                    pass  # Monitoring module not installed or initialized
+            self._record_embedding_usage(usage)
 
             output_dim = kwargs.get("output_dim", self.config.get("output_dim", 0))
-            if output_dim and len(embedding) > output_dim:
-                import math
-
-                embedding = embedding[:output_dim]
-                norm = math.sqrt(sum(x**2 for x in embedding))
-                if norm > 0:
-                    embedding = [x / norm for x in embedding]
-
-            return embedding
+            return self._fit_embedding_output_dim(embedding, output_dim)
         except APIError as e:
             logger.error(f"OpenAI API error during embedding: {e}")
             raise
 
     async def _request_embedding_async(self, text: str, **kwargs) -> List[float]:
         try:
-            if self._uses_doubao_embedding_api():
+            if self._uses_aliyun_embedding_api():
+                embedding, usage = await asyncio.to_thread(self._request_aliyun_embedding, text)
+            elif self._uses_doubao_embedding_api():
                 # Only ark has multimodal_embeddings
                 response = self.client.multimodal_embeddings.create(
                     model=self.model, input=[{"type": "text", "text": text}]
                 )
                 embedding = response.data.embedding
+                usage = response.usage if hasattr(response, "usage") else None
             else:
                 response = await self.async_client.embeddings.create(model=self.model, input=[text])
                 embedding = response.data[0].embedding
+                usage = response.usage if hasattr(response, "usage") else None
 
-            # Record token usage
-            if hasattr(response, "usage") and response.usage:
-                try:
-                    from opencontext.monitoring import record_token_usage
-
-                    usage = response.usage
-                    if isinstance(usage, dict):
-                        prompt_tokens = usage.get("prompt_tokens", 0)
-                        total_tokens = usage.get("total_tokens", 0)
-                    else:
-                        prompt_tokens = usage.prompt_tokens
-                        total_tokens = usage.total_tokens
-
-                    record_token_usage(
-                        model=self.model,
-                        prompt_tokens=prompt_tokens,
-                        completion_tokens=0,  # embedding has no completion tokens
-                        total_tokens=total_tokens,
-                    )
-                except ImportError:
-                    pass  # Monitoring module not installed or initialized
+            self._record_embedding_usage(usage)
 
             output_dim = kwargs.get("output_dim", self.config.get("output_dim", 0))
-            if output_dim and len(embedding) > output_dim:
-                import math
-
-                embedding = embedding[:output_dim]
-                norm = math.sqrt(sum(x**2 for x in embedding))
-                if norm > 0:
-                    embedding = [x / norm for x in embedding]
-
-            return embedding
+            return self._fit_embedding_output_dim(embedding, output_dim)
         except APIError as e:
             logger.error(f"OpenAI API error during embedding: {e}")
             raise
@@ -504,7 +548,13 @@ class LLMClient:
 
             elif self.llm_type == LLMType.EMBEDDING:
                 # Test with a simple text
-                if self._uses_doubao_embedding_api():
+                if self._uses_aliyun_embedding_api():
+                    embedding, _usage = self._request_aliyun_embedding("test")
+                    if embedding:
+                        return True, "Embedding model validation successful"
+                    else:
+                        return False, "Embedding model returned empty response"
+                elif self._uses_doubao_embedding_api():
                     response = self.client.multimodal_embeddings.create(
                         model=self.model, input=[{"type": "text", "text": "test"}]
                     )

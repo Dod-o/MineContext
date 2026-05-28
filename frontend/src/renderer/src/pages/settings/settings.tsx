@@ -82,6 +82,18 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
         </div>
         <div className="flex flex-col gap-[8px]">
           <span className="text-[#0B0B0F] font-roboto text-base font-normal leading-[22px]">Embedding model</span>
+          <FormItem field={`${prefix}-embeddingModelPlatform`} className="!mb-0" requiredSymbol={false}>
+            <Select
+              placeholder="Select embedding provider"
+              className="!w-[574px]"
+              options={[
+                { label: 'OpenAI compatible', value: 'custom' },
+                { label: 'OpenAI', value: 'openai' },
+                { label: 'Doubao', value: 'doubao' },
+                { label: 'Aliyun DashScope', value: 'aliyun' }
+              ]}
+            />
+          </FormItem>
           <FormItem
             field={`${prefix}-embeddingModelId`}
             className="!mb-0"
@@ -208,6 +220,7 @@ type ModelConfigField =
   | 'embeddingModelId'
   | 'embeddingBaseUrl'
   | 'embeddingApiKey'
+  | 'embeddingModelPlatform'
 
 export type SettingsFormProps = SettingsFormBase &
   Partial<Record<`${ModelTypeList}-${ModelConfigField}`, string>>
@@ -272,7 +285,8 @@ const Settings: FC<SettingsProps> = (props) => {
       [`${prefix}-baseUrl`]: config.baseUrl,
       [`${prefix}-embeddingModelId`]: config.embeddingModelId,
       [`${prefix}-embeddingBaseUrl`]: config.embeddingBaseUrl,
-      [`${prefix}-embeddingApiKey`]: config.embeddingApiKey
+      [`${prefix}-embeddingApiKey`]: config.embeddingApiKey,
+      [`${prefix}-embeddingModelPlatform`]: config.embeddingModelPlatform || ModelTypeList.Custom
     } as SettingsFormProps)
   })
 

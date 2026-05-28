@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import types
 import unittest
@@ -44,6 +45,34 @@ class FakeArk:
         raise AssertionError("custom embeddings must not use Ark multimodal_embeddings")
 
 
+class FakeHTTPResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return json.dumps(
+            {
+                "output": {"embeddings": [{"embedding": [0.4, 0.5, 0.6]}]},
+                "usage": {"input_tokens": 2, "total_tokens": 2},
+            }
+        ).encode("utf-8")
+
+
+class FakeUrlopen:
+    last_url = None
+    last_headers = None
+    last_payload = None
+
+    def __call__(self, request, timeout=None):
+        FakeUrlopen.last_url = request.full_url
+        FakeUrlopen.last_headers = dict(request.header_items())
+        FakeUrlopen.last_payload = json.loads(request.data.decode("utf-8"))
+        return FakeHTTPResponse()
+
+
 class LLMClientEmbeddingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -59,6 +88,8 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         sys.modules.pop("opencontext.llm.llm_client", None)
         cls.llm_client = importlib.import_module("opencontext.llm.llm_client")
+        cls.fake_urlopen = FakeUrlopen()
+        cls.llm_client.urllib_request.urlopen = cls.fake_urlopen
 
     def test_custom_embedding_validation_uses_standard_embeddings_api(self):
         client = self.llm_client.LLMClient(
@@ -117,6 +148,33 @@ class LLMClientEmbeddingTest(unittest.TestCase):
         )
 
         self.assertEqual(FakeOpenAI.last_base_url, "https://api.example.com/v1")
+
+    def test_aliyun_embedding_uses_dashscope_http_api(self):
+        client = self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.EMBEDDING,
+            config={
+                "base_url": "https://dashscope.aliyuncs.com",
+                "api_key": "dashscope-key",
+                "model": "multimodal-embedding-v1",
+                "provider": "aliyun",
+            },
+        )
+
+        embedding = client.generate_embedding("hello")
+
+        self.assertEqual(embedding, [0.4, 0.5, 0.6])
+        self.assertEqual(
+            FakeUrlopen.last_url,
+            "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding",
+        )
+        self.assertEqual(FakeUrlopen.last_headers["Authorization"], "Bearer dashscope-key")
+        self.assertEqual(
+            FakeUrlopen.last_payload,
+            {
+                "model": "multimodal-embedding-v1",
+                "input": {"contents": [{"text": "hello"}]},
+            },
+        )
 
 
 if __name__ == "__main__":
