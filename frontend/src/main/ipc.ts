@@ -100,8 +100,12 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.App_CancelDownload, () => appUpdater.cancelDownload())
 
   // launch on boot
+  ipcMain.handle(IpcChannel.App_GetLaunchOnBoot, () => {
+    return appService.getAppLaunchOnBoot()
+  })
+
   ipcMain.handle(IpcChannel.App_SetLaunchOnBoot, (_, isLaunchOnBoot: boolean) => {
-    appService.setAppLaunchOnBoot(isLaunchOnBoot)
+    return appService.setAppLaunchOnBoot(isLaunchOnBoot)
   })
 
   //only for mac

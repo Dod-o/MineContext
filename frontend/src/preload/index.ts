@@ -40,7 +40,10 @@ const api = {
   },
   checkForUpdate: () => ipcRenderer.invoke(IpcChannel.App_CheckForUpdate),
   quitAndInstall: () => ipcRenderer.invoke(IpcChannel.App_QuitAndInstall),
-  cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload)
+  cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload),
+  getLaunchOnBoot: () => ipcRenderer.invoke(IpcChannel.App_GetLaunchOnBoot),
+  setLaunchOnBoot: (isLaunchOnBoot: boolean) =>
+    ipcRenderer.invoke(IpcChannel.App_SetLaunchOnBoot, isLaunchOnBoot)
 }
 
 const dbAPI = {

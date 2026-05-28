@@ -24,6 +24,28 @@ export class AppService {
     return AppService.instance
   }
 
+  private getLinuxAutostartDesktopFile(): string {
+    const autostartDir = path.join(os.homedir(), '.config', 'autostart')
+    return path.join(autostartDir, isDev ? 'vikingdb-dev.desktop' : 'vikingdb.desktop')
+  }
+
+  public async getAppLaunchOnBoot(): Promise<boolean> {
+    if (isWin || isMac) {
+      return app.getLoginItemSettings().openAtLogin
+    }
+
+    if (isLinux) {
+      try {
+        await fs.promises.access(this.getLinuxAutostartDesktopFile())
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    return false
+  }
+
   public async setAppLaunchOnBoot(isLaunchOnBoot: boolean): Promise<void> {
     // Set login item settings for windows and mac
     // linux is not supported because it requires more file operations
@@ -32,7 +54,7 @@ export class AppService {
     } else if (isLinux) {
       try {
         const autostartDir = path.join(os.homedir(), '.config', 'autostart')
-        const desktopFile = path.join(autostartDir, isDev ? 'vikingdb-dev.desktop' : 'vikingdb.desktop')
+        const desktopFile = this.getLinuxAutostartDesktopFile()
 
         if (isLaunchOnBoot) {
           // Ensure autostart directory exists

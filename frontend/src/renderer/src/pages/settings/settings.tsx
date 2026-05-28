@@ -1,8 +1,8 @@
 // Copyright (c) 2025 Beijing Volcano Engine Technology Co., Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
-import { FC, useMemo, useEffect } from 'react'
-import { Form, Button, Select, Input, Typography, Spin, Message } from '@arco-design/web-react'
+import { FC, useMemo, useEffect, useState } from 'react'
+import { Form, Button, Select, Input, Typography, Spin, Message, Switch } from '@arco-design/web-react'
 import { find, get, isEmpty, pick } from 'lodash'
 
 import ModelRadio from './components/modelRadio/model-radio'
@@ -206,6 +206,8 @@ const Settings: FC<SettingsProps> = (props) => {
   const { closeSetting, init } = props
 
   const [form] = Form.useForm<SettingsFormProps>()
+  const [launchOnBoot, setLaunchOnBoot] = useState(false)
+  const [launchOnBootLoading, setLaunchOnBootLoading] = useState(false)
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
 
   const { run: updateModelSettings, loading: updateLoading } = useRequest(updateModelSettingsAPI, {
@@ -280,7 +282,28 @@ const Settings: FC<SettingsProps> = (props) => {
 
   useMount(() => {
     getInfo()
+    ;(async () => {
+      try {
+        const enabled = await window.api.getLaunchOnBoot()
+        setLaunchOnBoot(Boolean(enabled))
+      } catch (error) {
+        console.error('Failed to load launch on boot setting', error)
+      }
+    })()
   })
+
+  const handleLaunchOnBootChange = useMemoizedFn(async (checked: boolean) => {
+    setLaunchOnBootLoading(true)
+    try {
+      await window.api.setLaunchOnBoot(checked)
+      setLaunchOnBoot(checked)
+    } catch (error) {
+      Message.error('Failed to update launch on boot setting')
+    } finally {
+      setLaunchOnBootLoading(false)
+    }
+  })
+
   useEffect(() => {
     const config = get(modelInfo, 'config')
     if (!getInfoLoading && !isEmpty(config) && !init) {
@@ -309,6 +332,17 @@ const Settings: FC<SettingsProps> = (props) => {
           </div>
 
           <div>
+            {!init && (
+              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[#E5E6EB] pb-4">
+                <div>
+                  <div className="text-[14px] leading-[20px] text-[#0B0B0F]">Launch at login</div>
+                  <div className="text-[12px] leading-[18px] text-[#6E718C]">
+                    Start MineContext automatically when you sign in.
+                  </div>
+                </div>
+                <Switch checked={launchOnBoot} loading={launchOnBootLoading} onChange={handleLaunchOnBootChange} />
+              </div>
+            )}
             <Form
               autoComplete="off"
               layout={'vertical'}
