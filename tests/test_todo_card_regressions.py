@@ -35,6 +35,16 @@ class TodoCardRegressionTest(unittest.TestCase):
         self.assertIn("{isBatchMode ? 'Cancel' : 'Batch'}", source)
         self.assertIn("selectedVisibleTaskIds.length === 0", source)
 
+    def test_generated_todo_review_queue_has_bulk_actions(self):
+        source = TODO_CARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("TaskStatus.Review", source)
+        self.assertIn("handleConfirmAllGeneratedTasks", source)
+        self.assertIn("handleDeleteAllGeneratedTasks", source)
+        self.assertIn(">Suggested</Text>", source)
+        self.assertIn("Add all", source)
+        self.assertIn("Delete all", source)
+
 
 if __name__ == "__main__":
     unittest.main()
