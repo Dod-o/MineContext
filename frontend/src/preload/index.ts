@@ -93,7 +93,10 @@ const dbAPI = {
   // tasks
   getTasks: (startTime: string, endTime: string) =>
     ipcRenderer.invoke(IpcChannel.Database_GetAllTasks, startTime, endTime),
-  updateTask: (id: number, task: Partial<{ content: string; urgency: number; start_time: string; end_time: string }>) =>
+  updateTask: (
+    id: number,
+    task: Partial<{ content: string; status: number; urgency: number; start_time: string; end_time: string }>
+  ) =>
     ipcRenderer.invoke(IpcChannel.Database_UpdateTask, id, task),
   deleteTask: (id: number) => ipcRenderer.invoke(IpcChannel.Database_DeleteTask, id),
   toggleTaskStatus: (id: number) => ipcRenderer.invoke(IpcChannel.Database_ToggleTaskStatus, id),

@@ -16,6 +16,11 @@ export const enum TaskUrgency {
   Low = 0,
   Done = -1
 }
+export const enum TaskStatus {
+  Pending = 0,
+  Completed = 1,
+  Review = 2
+}
 export const TODO_LIST_STATUS = {
   Create: 'create',
   Edit: 'edit'

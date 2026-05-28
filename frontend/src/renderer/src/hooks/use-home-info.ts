@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import dayjs, { Dayjs } from 'dayjs'
 import { useRequest } from 'ahooks'
+import { TaskStatus } from '@renderer/constant/feed'
 
 interface Vault {
   id: number
@@ -50,10 +51,10 @@ export const useHomeInfo = () => {
         {
           id: res.lastInsertRowid || -1,
           content: taskData.content || '',
-          status: taskData.status || 0,
+          status: taskData.status ?? TaskStatus.Pending,
           start_time: taskData.start_time || '',
           end_time: taskData.end_time || '',
-          urgency: taskData.urgency || 0
+          urgency: taskData.urgency ?? 0
         }
       ])
       return res.lastInsertRowid
@@ -74,7 +75,7 @@ export const useHomeInfo = () => {
 
   const updateTask = async (
     id: number,
-    taskData: Partial<{ content: string; urgency: number; start_time: string; end_time: string }>
+    taskData: Partial<{ content: string; status: number; urgency: number; start_time: string; end_time: string }>
   ) => {
     try {
       await window.dbAPI.updateTask(id, taskData)

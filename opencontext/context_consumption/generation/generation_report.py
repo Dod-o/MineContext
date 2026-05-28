@@ -21,6 +21,7 @@ from opencontext.tools.tools_executor import ToolsExecutor
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+TODO_STATUS_REVIEW = 2
 NO_ACTIVITY_REPORT = "No activity data available for the specified time range."
 
 
@@ -151,6 +152,8 @@ class ReportGenerator:
         todos = get_storage().get_todos(start_time=start_datetime, end_time=end_datetime, limit=100)
         todos_list = []
         for todo in todos:
+            if todo.get("status") == TODO_STATUS_REVIEW:
+                continue
             todos_list.append({
                 "id": todo.get("id"),
                 "content": todo.get("content"),

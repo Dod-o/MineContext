@@ -12,6 +12,8 @@ import { getLogger } from '@shared/logger/main'
 import { VaultDatabaseService } from './VaultDatabaseService'
 import { resolveSqliteDbPath } from '../utils/data-path'
 const logger = getLogger('DatabaseManager')
+const TODO_STATUS_REVIEW = 2
+const TODO_REVIEW_TTL_MS = 7 * 24 * 60 * 60 * 1000
 class DatabaseManager extends VaultDatabaseService {
   private db: Database.Database | null = null
   private dbPath: string
@@ -223,6 +225,7 @@ class DatabaseManager extends VaultDatabaseService {
         logger.error('❌ Invalid endTime format:', endTime)
         throw new Error('Invalid endTime format. Expected ISO 8601 string.')
       }
+      this.deleteExpiredReviewTasks()
       const db = DB.getInstance(DB.dbName)
       const sql = 'SELECT * FROM todo WHERE start_time >= ? AND start_time < ? ORDER BY start_time ASC'
       const rows = db.query<TODOActivity>(sql, [startTime, endTime])
@@ -263,7 +266,7 @@ class DatabaseManager extends VaultDatabaseService {
 
   public updateTask(
     taskId: number,
-    taskData: Partial<{ content: string; urgency: number; start_time: string; end_time: string }>
+    taskData: Partial<{ content: string; status: number; urgency: number; start_time: string; end_time: string }>
   ) {
     try {
       this.ensureInitialized()
@@ -275,6 +278,10 @@ class DatabaseManager extends VaultDatabaseService {
       if (taskData.content !== undefined) {
         updateFields.push('content = ?')
         values.push(taskData.content)
+      }
+      if (taskData.status !== undefined) {
+        updateFields.push('status = ?')
+        values.push(taskData.status)
       }
       if (taskData.urgency !== undefined) {
         updateFields.push('urgency = ?')
@@ -324,6 +331,19 @@ class DatabaseManager extends VaultDatabaseService {
     } catch (error) {
       logger.error('❌ Failed to delete task:', error)
       throw error
+    }
+  }
+
+  private deleteExpiredReviewTasks() {
+    try {
+      const cutoff = toSqliteDatetime(Date.now() - TODO_REVIEW_TTL_MS)
+      const stmt = this.db!.prepare('DELETE FROM todo WHERE status = ? AND created_at < ?')
+      const result = stmt.run(TODO_STATUS_REVIEW, cutoff)
+      if (result.changes > 0) {
+        logger.info(`🧹 Deleted ${result.changes} expired generated todos`)
+      }
+    } catch (error) {
+      logger.error('❌ Failed to delete expired generated todos:', error)
     }
   }
 

@@ -17,14 +17,14 @@ import {
   Form,
   Tooltip
 } from '@arco-design/web-react'
-import { IconClose, IconDelete, IconSelectAll } from '@arco-design/web-react/icon'
+import { IconCheck, IconClose, IconDelete, IconSelectAll } from '@arco-design/web-react/icon'
 import { Task, useHomeInfo } from '@renderer/hooks/use-home-info'
 import { FC, useEffect, useMemo, useRef, useState } from 'react'
 import taskEmpty from '@renderer/assets/images/task-empty.svg'
 import addIcon from '@renderer/assets/icons/add.svg'
 import copyIcon from '@renderer/assets/images/copy.svg'
 import { useInitPrepareData } from '@renderer/hooks/use-init-prepare-data'
-import { TaskUrgency, TODO_LIST_STATUS } from '@renderer/constant/feed'
+import { TaskStatus, TaskUrgency, TODO_LIST_STATUS } from '@renderer/constant/feed'
 import { useMemoizedFn } from 'ahooks'
 import highPriorityIcon from '@renderer/assets/icons/high-priority.svg'
 import mediumPriorityIcon from '@renderer/assets/icons/medium-priority.svg'
@@ -79,11 +79,12 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null) // Copied tooltip state
   const { deleteTodoList, data: todoListInitData } = useInitPrepareData()
   const [form] = Form.useForm()
+  const reviewTasks = useMemo(() => tasks.filter((task) => task.status === TaskStatus.Review), [tasks])
   const filterDoneTasks = useMemo(
     () =>
-      tasks.map((task) => {
+      tasks.filter((task) => task.status !== TaskStatus.Review).map((task) => {
         // Set urgency to done when task is done
-        if (task.status === 1) {
+        if (task.status === TaskStatus.Completed) {
           return {
             ...task,
             urgency: TaskUrgency.Done
@@ -103,8 +104,9 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     [selectedTaskIds, visibleTaskIds]
   )
   const initialTodoIds = useMemo(() => new Set(todoListInitData.map((task) => task.id)), [todoListInitData])
-  const hasTasks = useMemo(() => visibleTasks.length > 0, [visibleTasks])
-  const isAllTasksSelected = hasTasks && selectedVisibleTaskIds.length === visibleTaskIds.length
+  const hasVisibleTasks = useMemo(() => visibleTasks.length > 0, [visibleTasks])
+  const hasTasks = useMemo(() => hasVisibleTasks || reviewTasks.length > 0, [hasVisibleTasks, reviewTasks.length])
+  const isAllTasksSelected = hasVisibleTasks && selectedVisibleTaskIds.length === visibleTaskIds.length
   const isSomeTasksSelected = selectedVisibleTaskIds.length > 0 && !isAllTasksSelected
 
   // Handle deleting a task
@@ -188,6 +190,46 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     }
   })
 
+  const handleConfirmGeneratedTask = useMemoizedFn(async (taskId: number) => {
+    try {
+      await updateTask(taskId, { status: TaskStatus.Pending })
+      Message.success('task confirmed')
+    } catch (error) {
+      Message.error('task confirm failed')
+    }
+  })
+
+  const handleConfirmAllGeneratedTasks = useMemoizedFn(async () => {
+    try {
+      for (const task of reviewTasks) {
+        await updateTask(task.id, { status: TaskStatus.Pending })
+      }
+      Message.success('tasks confirmed')
+    } catch (error) {
+      Message.error('tasks confirm failed')
+    }
+  })
+
+  const handleDeleteGeneratedTask = useMemoizedFn(async (taskId: number) => {
+    try {
+      await deleteTask(taskId)
+      Message.success('task delete success')
+    } catch (error) {
+      Message.error('task delete failed')
+    }
+  })
+
+  const handleDeleteAllGeneratedTasks = useMemoizedFn(async () => {
+    try {
+      for (const task of reviewTasks) {
+        await deleteTask(task.id)
+      }
+      Message.success('tasks delete success')
+    } catch (error) {
+      Message.error('tasks delete failed')
+    }
+  })
+
   const renderTask = (task) => {
     const isSelected = selectedTaskIds.includes(task.id)
 
@@ -220,7 +262,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
             <Radio className="self-start mt-0.5" checked={!!task.status} onClick={() => handleToggleTaskStatus(task)} />
           )}
           <div
-            className={`font-roboto text-sm font-normal text-[#3F3F51] leading-[22px] max-w-[800px] tracking-[0.042px] whitespace-normal break-words ${task.status && 'line-through'}`}
+            className={`font-roboto text-sm font-normal text-[#3F3F51] leading-[22px] max-w-[800px] tracking-[0.042px] whitespace-normal break-words ${task.status === TaskStatus.Completed ? 'line-through' : ''}`}
             onClick={() => {
               if (!isBatchMode) {
                 handleEditToDoList(task)
@@ -238,7 +280,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                 className="[&_.arco-btn-size-small]: !w-[14px] !h-[14px]"
                 icon={<img src={copyIcon} alt="copyIcon" className="w-[14px] h-[14px]" />}
                 onClick={() => handleCopyContent(task.content, task.id)}
-                disabled={!!task.status}
+                disabled={task.status === TaskStatus.Completed}
               />
             </Tooltip>
             <Popconfirm
@@ -273,6 +315,29 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       </div>
     )
   }
+
+  const renderReviewTask = (task: Task) => (
+    <div key={task.id} className="flex w-full items-start justify-between gap-3 px-6 py-1">
+      <div className="min-w-0 flex-1 font-roboto text-sm font-normal text-[#3F3F51] leading-[22px] tracking-[0.042px] whitespace-normal break-words">
+        {task.content}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button type="text" size="mini" icon={<IconCheck />} onClick={() => handleConfirmGeneratedTask(task.id)}>
+          Add
+        </Button>
+        <Popconfirm
+          title="Confirm delete"
+          content="Confirm to delete this todo?"
+          onOk={() => handleDeleteGeneratedTask(task.id)}
+          okText="Confirm"
+          cancelText="Cancel">
+          <Button type="text" size="mini" status="danger" icon={<IconDelete />}>
+            Delete
+          </Button>
+        </Popconfirm>
+      </div>
+    </div>
+  )
 
   function buildTodoTree(tasks: Task[]) {
     const rootTitle = (urgency: TaskUrgency) => (
@@ -371,7 +436,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       id = await addTask({
         content: task.content,
         urgency: task.urgency,
-        status: 0
+        status: TaskStatus.Pending
       })
     }
     timer.current = setTimeout(() => {
@@ -473,7 +538,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
               </div>
             </Space>
             <div className="flex items-center gap-2">
-              {hasTasks && (
+              {hasVisibleTasks && (
                 <Button
                   type={isBatchMode ? 'secondary' : 'text'}
                   size="mini"
@@ -497,7 +562,34 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
         <div className={`flex h-[340px] max-h-[340px] flex-col gap-4 self-stretch`}>
           {hasTasks ? (
             <>
-              {isBatchMode && (
+              {reviewTasks.length > 0 && (
+                <div className="flex flex-col gap-2 self-stretch border-b border-[#E1E3EF] pb-3">
+                  <div className="flex items-center justify-between gap-3 px-6">
+                    <Text className="font-roboto text-sm font-medium text-[#0B0B0F]">Suggested</Text>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="text"
+                        size="mini"
+                        icon={<IconCheck />}
+                        onClick={handleConfirmAllGeneratedTasks}>
+                        Add all
+                      </Button>
+                      <Popconfirm
+                        title="Confirm delete"
+                        content="Confirm to delete suggested todos?"
+                        onOk={handleDeleteAllGeneratedTasks}
+                        okText="Confirm"
+                        cancelText="Cancel">
+                        <Button type="text" size="mini" status="danger" icon={<IconDelete />}>
+                          Delete all
+                        </Button>
+                      </Popconfirm>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">{reviewTasks.map(renderReviewTask)}</div>
+                </div>
+              )}
+              {isBatchMode && hasVisibleTasks && (
                 <div className="flex items-center justify-between gap-3 px-6 py-1 border-b border-[#E1E3EF]">
                   <Checkbox
                     checked={isAllTasksSelected}
@@ -523,7 +615,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                   </Popconfirm>
                 </div>
               )}
-              <div>{buildTodoTree(visibleTasks)}</div>
+              {hasVisibleTasks && <div>{buildTodoTree(visibleTasks)}</div>}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center pt-[60px] pb-[60px] text-center">

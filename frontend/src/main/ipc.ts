@@ -479,7 +479,7 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
     async (
       _,
       id: number,
-      taskData: Partial<{ content: string; urgency: number; start_time: string; end_time: string }>
+      taskData: Partial<{ content: string; status: number; urgency: number; start_time: string; end_time: string }>
     ) => {
       await ensureDbInitialized()
       return db.updateTask(id, taskData)

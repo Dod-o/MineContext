@@ -23,6 +23,7 @@ from opencontext.utils.json_parser import parse_json_from_response
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+TODO_STATUS_REVIEW = 2
 
 
 @dataclass
@@ -97,6 +98,7 @@ class SmartTodoManager:
 
                 todo_id = get_storage().insert_todo(
                     content=content,
+                    status=TODO_STATUS_REVIEW,
                     urgency=urgency,
                     end_time=deadline,
                     assignee=participants_str,
@@ -122,7 +124,7 @@ class SmartTodoManager:
 
             # Return the complete result for external event processing
             return {
-                "content": f"{len(todo_ids)} tasks have been generated.",
+                "content": f"{len(todo_ids)} task suggestions are ready for review.",
                 "todo_ids": todo_ids,
                 "tasks": tasks,
             }
