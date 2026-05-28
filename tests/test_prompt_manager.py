@@ -54,6 +54,44 @@ class PromptManagerTest(unittest.TestCase):
             self.assertEqual(prompts["system"], "legacy system")
             self.assertEqual(prompts["user"], "legacy user")
 
+    def test_save_prompts_ignores_non_prompt_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompts_path = root / "prompts_en.yaml"
+            prompts_path.write_text(
+                "\n".join(
+                    [
+                        "generation:",
+                        "  generation_report:",
+                        "    system: default",
+                        "    user: default",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            prompt_manager = PromptManager(str(prompts_path), user_prompts_dir=str(root))
+
+            self.assertTrue(
+                prompt_manager.save_prompts(
+                    {
+                        "generation": {
+                            "generation_report": {
+                                "system": "custom",
+                                "user": "custom",
+                            }
+                        },
+                        "content_generation": {"debug": {"enabled": True}},
+                        "vlm_model": {"api_key": "secret"},
+                    }
+                )
+            )
+
+            saved_prompts = yaml.safe_load((root / "user_prompts_en.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(list(saved_prompts.keys()), ["generation"])
+            self.assertNotIn("content_generation", prompt_manager.prompts)
+            self.assertNotIn("vlm_model", prompt_manager.prompts)
+
 
 if __name__ == "__main__":
     unittest.main()

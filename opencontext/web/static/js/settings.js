@@ -1,7 +1,21 @@
 // Settings page JavaScript
 
 let currentPrompts = {};
+let currentGeneralSettings = {};
 let selectedPromptKey = '';
+
+const NON_PROMPT_TOP_LEVEL_KEYS = new Set([
+    'api_auth',
+    'capture',
+    'completion',
+    'consumption',
+    'content_generation',
+    'embedding_model',
+    'logging',
+    'storage',
+    'vlm_model',
+    'web'
+]);
 
 // Toast notification helper
 function showToast(message, isError = false) {
@@ -12,6 +26,25 @@ function showToast(message, isError = false) {
     toastEl.classList.add(isError ? 'bg-danger' : 'bg-success');
     const toast = new bootstrap.Toast(toastEl);
     toast.show();
+}
+
+function stripNonPromptTopLevelKeys(prompts) {
+    const result = {};
+    for (const [key, value] of Object.entries(prompts || {})) {
+        if (!NON_PROMPT_TOP_LEVEL_KEYS.has(key)) {
+            result[key] = value;
+        }
+    }
+    return result;
+}
+
+function buildPromptsPayload() {
+    return stripNonPromptTopLevelKeys(currentPrompts);
+}
+
+function formatApiError(data, response, fallback) {
+    const detail = data?.message || `HTTP ${response.status}`;
+    return `${fallback}: ${detail}`;
 }
 
 // ==================== 截图捕获设置 ====================
@@ -350,7 +383,7 @@ async function loadPrompts() {
         const data = await response.json();
 
         if (data.code === 0 && data.data) {
-            currentPrompts = data.data.prompts;
+            currentPrompts = stripNonPromptTopLevelKeys(data.data.prompts);
             buildPromptTree(currentPrompts);
         }
     } catch (error) {
@@ -364,7 +397,7 @@ async function savePrompts() {
         const response = await fetch('/api/settings/prompts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompts: currentPrompts })
+            body: JSON.stringify({ prompts: buildPromptsPayload() })
         });
         const data = await response.json();
 
@@ -624,7 +657,7 @@ async function loadPromptsToCategories() {
 
         if (promptsData.code === 0 && promptsData.data) {
             // API returns {data: {prompts: {...}}}
-            currentPrompts = promptsData.data.prompts || promptsData.data;
+            currentPrompts = stripNonPromptTopLevelKeys(promptsData.data.prompts || promptsData.data);
 
             // 填充各个分类的prompts
             for (const [category, config] of Object.entries(PROMPT_CATEGORIES)) {
@@ -652,6 +685,7 @@ async function loadPromptsToCategories() {
 
         // 加载Debug配置 from general settings
         if (settingsData.code === 0 && settingsData.data) {
+            currentGeneralSettings = settingsData.data;
             const debugConfig = settingsData.data.content_generation?.debug || {};
             const debugEnabledEl = document.getElementById('debugEnabled');
             const debugPathEl = document.getElementById('debugOutputPath');
@@ -696,7 +730,7 @@ async function savePromptCategory(category) {
         const response = await fetch('/api/settings/prompts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompts: currentPrompts })
+            body: JSON.stringify({ prompts: buildPromptsPayload() })
         });
 
         const data = await response.json();
@@ -737,7 +771,7 @@ async function saveAllPrompts() {
         const response = await fetch('/api/settings/prompts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompts: currentPrompts })
+            body: JSON.stringify({ prompts: buildPromptsPayload() })
         });
 
         const data = await response.json();
@@ -757,21 +791,19 @@ async function saveDebugConfig() {
     const enabled = document.getElementById('debugEnabled').checked;
     const outputPath = document.getElementById('debugOutputPath').value;
 
-    if (!currentPrompts.content_generation) {
-        currentPrompts.content_generation = {};
-    }
-
-    currentPrompts.content_generation.debug = {
+    const contentGeneration = { ...(currentGeneralSettings.content_generation || {}) };
+    contentGeneration.debug = {
         enabled: enabled,
         output_path: outputPath
     };
+    currentGeneralSettings.content_generation = contentGeneration;
 
     try {
         const response = await fetch('/api/settings/general', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                content_generation: currentPrompts.content_generation
+                content_generation: currentGeneralSettings.content_generation
             })
         });
 
@@ -802,7 +834,7 @@ async function viewHistory(category) {
         const response = await fetch(`/api/settings/prompts/history/${category}`);
         const data = await response.json();
 
-        if (data.code === 0 && data.data) {
+        if (data.code === 0 && Array.isArray(data.data)) {
             const historyList = document.getElementById('historyList');
             historyList.innerHTML = '';
 
@@ -826,11 +858,11 @@ async function viewHistory(category) {
 
             document.getElementById('historyDetail').innerHTML = '<p class="text-muted">请选择一条历史记录</p>';
         } else {
-            showToast('加载历史记录失败', true);
+            showToast(formatApiError(data, response, '加载历史记录失败'), true);
         }
     } catch (error) {
         console.error('加载历史记录失败:', error);
-        showToast('加载历史记录失败', true);
+        showToast('加载历史记录失败: ' + error.message, true);
     }
 
     // 显示modal

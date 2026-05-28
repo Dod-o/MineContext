@@ -27,7 +27,8 @@ class PromptManager:
         self.user_prompts_dir = user_prompts_dir
         if prompt_config_path and os.path.exists(prompt_config_path):
             with open(prompt_config_path, "r", encoding="utf-8") as f:
-                self.prompts = yaml.safe_load(f)
+                self.prompts = yaml.safe_load(f) or {}
+            self._prompt_root_keys = set(self.prompts.keys())
         else:
             logger.warning("Prompt config file not found, using default prompts.")
             raise FileNotFoundError("Prompt config file not found.")
@@ -99,6 +100,11 @@ class PromptManager:
             if not user_prompts:
                 return False
 
+            user_prompts = self._sanitize_prompts_data(user_prompts)
+            if not user_prompts:
+                logger.warning(f"No valid prompt keys found in: {user_prompts_path}")
+                return False
+
             # Deep merge user prompts into current prompts
             self.prompts = self._deep_merge(self.prompts, user_prompts)
             logger.info(f"User prompts loaded from: {user_prompts_path}")
@@ -117,6 +123,11 @@ class PromptManager:
             return False
 
         try:
+            prompts_data = self._sanitize_prompts_data(prompts_data)
+            if not prompts_data:
+                logger.error("No valid prompt data to save")
+                return False
+
             # Create directory if it doesn't exist
             dir_name = os.path.dirname(user_prompts_path)
             if dir_name:
@@ -157,6 +168,26 @@ class PromptManager:
         except Exception as e:
             logger.error(f"Failed to save prompts: {e}")
             return False
+
+    def _sanitize_prompts_data(self, prompts_data: dict) -> dict:
+        if not isinstance(prompts_data, dict):
+            return {}
+
+        sanitized = {}
+        ignored_keys = []
+        for key, value in prompts_data.items():
+            if key in self._prompt_root_keys:
+                sanitized[key] = value
+            else:
+                ignored_keys.append(key)
+
+        if ignored_keys:
+            logger.warning(
+                "Ignoring non-prompt top-level keys while saving prompts: "
+                + ", ".join(sorted(ignored_keys))
+            )
+
+        return sanitized
 
     def export_prompts(self) -> str:
         """
