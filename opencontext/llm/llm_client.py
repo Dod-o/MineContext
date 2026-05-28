@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 class LLMProvider(Enum):
     OPENAI = "openai"
     DOUBAO = "doubao"
+    CUSTOM = "custom"
 
 
 class LLMType(Enum):
@@ -38,16 +39,19 @@ class LLMClient:
         self.api_key = config.get("api_key")
         self.base_url = config.get("base_url")
         self.timeout = config.get("timeout", 300)
-        self.provider = config.get("provider", LLMProvider.OPENAI.value)
+        self.provider = (config.get("provider") or LLMProvider.OPENAI.value).lower()
         if not self.api_key or not self.base_url or not self.model:
             raise ValueError("API key, base URL, and model must be provided")
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
         self.async_client = AsyncOpenAI(
             api_key=self.api_key, base_url=self.base_url, timeout=self.timeout
         )
-        if self.provider == LLMProvider.DOUBAO.value and self.llm_type == LLMType.EMBEDDING:
+        if self._uses_doubao_embedding_api():
             self.client = Ark(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
             self.async_client = None
+
+    def _uses_doubao_embedding_api(self) -> bool:
+        return self.provider == LLMProvider.DOUBAO.value and self.llm_type == LLMType.EMBEDDING
 
     def generate(self, prompt: str, **kwargs) -> str:
         messages = [{"role": "user", "content": prompt}]
@@ -266,14 +270,14 @@ class LLMClient:
 
     def _request_embedding(self, text: str, **kwargs) -> List[float]:
         try:
-            if self.provider != LLMProvider.DOUBAO.value:
-                response = self.client.embeddings.create(model=self.model, input=[text])
-                embedding = response.data[0].embedding
-            else:
+            if self._uses_doubao_embedding_api():
                 response = self.client.multimodal_embeddings.create(
                     model=self.model, input=[{"type": "text", "text": text}]
                 )
                 embedding = response.data.embedding
+            else:
+                response = self.client.embeddings.create(model=self.model, input=[text])
+                embedding = response.data[0].embedding
 
             # Record token usage
             if hasattr(response, "usage") and response.usage:
@@ -313,7 +317,7 @@ class LLMClient:
 
     async def _request_embedding_async(self, text: str, **kwargs) -> List[float]:
         try:
-            if self.provider == LLMProvider.DOUBAO.value:
+            if self._uses_doubao_embedding_api():
                 # Only ark has multimodal_embeddings
                 response = self.client.multimodal_embeddings.create(
                     model=self.model, input=[{"type": "text", "text": text}]
@@ -477,7 +481,7 @@ class LLMClient:
 
             elif self.llm_type == LLMType.EMBEDDING:
                 # Test with a simple text
-                if self.provider == LLMProvider.DOUBAO.value:
+                if self._uses_doubao_embedding_api():
                     response = self.client.multimodal_embeddings.create(
                         model=self.model, input=[{"type": "text", "text": "test"}]
                     )
