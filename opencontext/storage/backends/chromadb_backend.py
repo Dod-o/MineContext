@@ -482,6 +482,42 @@ class ChromaDBBackend(IVectorStorageBackend):
             logger.debug(f"Failed to search context {id} in {context_type} collection: {e}")
             return None
 
+    def _get_collection_page(
+        self,
+        collection,
+        limit: int,
+        offset: int,
+        where_clause: Optional[Dict[str, Any]],
+        need_vector: bool,
+    ) -> Tuple[Dict[str, Any], int]:
+        include = (
+            ["metadatas", "documents", "embeddings"]
+            if need_vector
+            else ["metadatas", "documents"]
+        )
+        try:
+            return (
+                collection.get(
+                    limit=limit,
+                    offset=offset,
+                    where=where_clause,
+                    include=include,
+                ),
+                0,
+            )
+        except TypeError as e:
+            if "offset" not in str(e):
+                raise
+            logger.debug("ChromaDB collection.get does not support offset; using compatibility pagination")
+            return (
+                collection.get(
+                    limit=limit + offset,
+                    where=where_clause,
+                    include=include,
+                ),
+                offset,
+            )
+
     def get_all_processed_contexts(
         self,
         context_types: Optional[List[str]] = None,
@@ -505,22 +541,18 @@ class ChromaDBBackend(IVectorStorageBackend):
             try:
                 where_clause = self._build_where_clause(filter)
 
-                # ChromaDB's get method does not directly support offset, so pagination needs to be implemented in other ways
                 with self._write_lock:
-                    results = collection.get(
-                        limit=limit + offset,  # Get more data to simulate offset
-                        where=where_clause,
-                        include=(
-                            ["metadatas", "documents", "embeddings"]
-                            if need_vector
-                            else ["metadatas", "documents"]
-                        ),
+                    results, manual_offset = self._get_collection_page(
+                        collection=collection,
+                        limit=limit,
+                        offset=offset,
+                        where_clause=where_clause,
+                        need_vector=need_vector,
                     )
 
                 contexts = []
                 if results and results["ids"]:
-                    # Manually apply offset
-                    start_idx = min(offset, len(results["ids"]))
+                    start_idx = min(manual_offset, len(results["ids"]))
                     end_idx = min(start_idx + limit, len(results["ids"]))
 
                     for i in range(start_idx, end_idx):
