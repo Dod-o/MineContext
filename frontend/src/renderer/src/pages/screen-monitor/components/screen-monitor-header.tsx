@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Space, Typography, Popover } from '@arco-design/web-react'
+import { Button, Space, Typography, Popover, Tag, Tooltip } from '@arco-design/web-react'
 import { IconPlayArrow, IconSettings, IconRecordStop } from '@arco-design/web-react/icon'
 
 const { Title, Text } = Typography
@@ -8,9 +8,12 @@ interface ScreenMonitorHeaderProps {
   hasPermission: boolean
   isMonitoring: boolean
   isToday: boolean
+  apiConnectionStatus: 'unknown' | 'checking' | 'connected' | 'error'
+  apiConnectionMessage: string
   screenAllSources: any[]
   appAllSources: any[]
   onOpenSettings: () => void
+  onCheckApiConnection: () => void
   onStartMonitoring: () => void
   onStopMonitoring: () => void
   onRequestPermission: () => void
@@ -20,12 +23,22 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
   hasPermission,
   isMonitoring,
   isToday,
+  apiConnectionStatus,
+  apiConnectionMessage,
   screenAllSources,
   appAllSources,
   onOpenSettings,
+  onCheckApiConnection,
   onStartMonitoring,
   onStopMonitoring
 }) => {
+  const apiStatusConfig = {
+    unknown: { color: 'gray', label: 'API unknown' },
+    checking: { color: 'blue', label: 'API checking' },
+    connected: { color: 'green', label: 'API connected' },
+    error: { color: 'red', label: 'API unavailable' }
+  }[apiConnectionStatus]
+
   return (
     <div className="flex justify-between items-start mb-3 flex-col md:flex-row">
       <div className="w-full md:w-4/5">
@@ -45,6 +58,14 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
       <div className="flex items-center ml-0 md:ml-6 mt-4 md:mt-0 justify-end">
         {hasPermission ? (
           <Space>
+            <Tooltip content={apiConnectionMessage || 'Click to check model API connection.'}>
+              <Tag
+                color={apiStatusConfig.color}
+                className="cursor-pointer select-none"
+                onClick={onCheckApiConnection}>
+                {apiStatusConfig.label}
+              </Tag>
+            </Tooltip>
             <Popover content="Settings can only be adjusted after Stop Recording." disabled={!isMonitoring}>
               <Button
                 type="outline"

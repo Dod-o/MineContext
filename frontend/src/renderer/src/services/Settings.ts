@@ -52,3 +52,12 @@ export const updateModelSettingsAPI = async (
   })
   return get(res, 'data.data')
 }
+
+export const validateModelSettingsAPI = async (params: ModelConfigProps): Promise<string> => {
+  const res = await axiosInstance.post('/api/model_settings/validate', {
+    config: {
+      ...params
+    }
+  })
+  return get(res, 'data.message') || 'Model API connection is available'
+}

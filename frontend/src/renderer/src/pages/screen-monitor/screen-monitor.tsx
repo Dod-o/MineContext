@@ -26,8 +26,10 @@ import { getLogger } from '@shared/logger/renderer'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { RecordingStats } from './components/recording-stats-card'
 import { CaptureSource } from '@interface/common/source'
+import { getModelInfo, validateModelSettingsAPI } from '@renderer/services/Settings'
 
 const logger = getLogger('ScreenMonitor')
+type ApiConnectionStatus = 'unknown' | 'checking' | 'connected' | 'error'
 
 export interface Activity {
   id: string
@@ -87,6 +89,8 @@ const ScreenMonitor: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
   const [recordingStats, setRecordingStats] = useState<RecordingStats | null>(null)
+  const [apiConnectionStatus, setApiConnectionStatus] = useState<ApiConnectionStatus>('unknown')
+  const [apiConnectionMessage, setApiConnectionMessage] = useState('')
   const activityPollingRef = useRef<NodeJS.Timeout | null>(null)
   const statsPollingRef = useRef<NodeJS.Timeout | null>(null)
   const lastCheckedTimeRef = useRef<string>(
@@ -169,7 +173,37 @@ const ScreenMonitor: React.FC = () => {
   }
 
   // Start monitoring session
+  const checkApiConnection = useMemoizedFn(async () => {
+    setApiConnectionStatus('checking')
+    try {
+      const modelInfo = await getModelInfo()
+      if (!modelInfo?.config) {
+        const message = 'Model settings are incomplete.'
+        setApiConnectionStatus('error')
+        setApiConnectionMessage(message)
+        return { ok: false, message }
+      }
+
+      const message = await validateModelSettingsAPI(modelInfo.config)
+      setApiConnectionStatus('connected')
+      setApiConnectionMessage(message)
+      return { ok: true, message }
+    } catch (error: any) {
+      const message =
+        get(error, 'response.data.message') || get(error, 'message') || 'Model API connection check failed.'
+      setApiConnectionStatus('error')
+      setApiConnectionMessage(message)
+      return { ok: false, message }
+    }
+  })
+
   const startMonitoring = useMemoizedFn(async () => {
+    const apiCheck = await checkApiConnection()
+    if (!apiCheck.ok) {
+      Message.error(apiCheck.message || 'Model API is unavailable. Check Settings before recording.')
+      return
+    }
+
     await window.screenMonitorAPI.updateModelConfig({
       recordInterval,
       recordingHours,
@@ -306,6 +340,10 @@ const ScreenMonitor: React.FC = () => {
       stopStatsPolling()
     }
   }, [stopActivityPolling, stopStatsPolling])
+
+  useEffect(() => {
+    checkApiConnection()
+  }, [checkApiConnection])
 
   // Listen for lock/unlock screen events
   useObservableTask(
@@ -504,9 +542,12 @@ const ScreenMonitor: React.FC = () => {
           hasPermission={hasPermission}
           isMonitoring={isMonitoring}
           isToday={isToday}
+          apiConnectionStatus={apiConnectionStatus}
+          apiConnectionMessage={apiConnectionMessage}
           screenAllSources={screenAllSources}
           appAllSources={appAllSources}
           onOpenSettings={openSettings}
+          onCheckApiConnection={checkApiConnection}
           onStartMonitoring={startMonitoring}
           onStopMonitoring={stopMonitoring}
           onRequestPermission={handleRequestPermission}
