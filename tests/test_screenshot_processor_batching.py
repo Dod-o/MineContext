@@ -87,6 +87,7 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
         processor._batch_timeout = 10
         processor._max_raw_properties = 2
         processor._max_cached_contexts_per_type = 2
+        processor._delete_after_processing = False
         return processor
 
     def _raw_context(self, index: int):
@@ -149,6 +150,30 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
             [context.extracted_data.title for context in trimmed.values()],
             ["context 2", "context 3"],
         )
+
+    def test_semantic_only_cleanup_strips_paths_after_processing(self):
+        processor = self._build_processor()
+        processor._delete_after_processing = True
+        tmp_file = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            tmp_file.write(b"processed-image")
+            tmp_file.close()
+            context = self._processed_context(1)
+            context.properties.raw_properties[0].content_path = tmp_file.name
+
+            image_paths = processor._strip_processed_image_paths([context])
+            processor._delete_processed_image_files(image_paths)
+
+            self.assertEqual(image_paths, [tmp_file.name])
+            self.assertIsNone(context.properties.raw_properties[0].content_path)
+            self.assertEqual(
+                context.properties.raw_properties[0].additional_info["image_retained"],
+                False,
+            )
+            self.assertFalse(os.path.exists(tmp_file.name))
+        finally:
+            if os.path.exists(tmp_file.name):
+                os.unlink(tmp_file.name)
 
     def test_vlm_response_accepts_root_list_and_skips_invalid_items(self):
         processor = self._build_processor()

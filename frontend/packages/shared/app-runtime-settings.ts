@@ -8,11 +8,13 @@ export const MAX_BACKEND_START_PORT = 65535
 export interface AppRuntimeSettings {
   screenshotDirectory: string
   backendStartPort: number
+  retainScreenshotImages: boolean
 }
 
 export const defaultAppRuntimeSettings: AppRuntimeSettings = {
   screenshotDirectory: '',
-  backendStartPort: DEFAULT_BACKEND_START_PORT
+  backendStartPort: DEFAULT_BACKEND_START_PORT,
+  retainScreenshotImages: true
 }
 
 export function normalizeBackendStartPort(value: unknown): number {
@@ -31,6 +33,7 @@ export function normalizeBackendStartPort(value: unknown): number {
 export function normalizeAppRuntimeSettings(settings?: Partial<AppRuntimeSettings> | null): AppRuntimeSettings {
   return {
     screenshotDirectory: typeof settings?.screenshotDirectory === 'string' ? settings.screenshotDirectory.trim() : '',
-    backendStartPort: normalizeBackendStartPort(settings?.backendStartPort)
+    backendStartPort: normalizeBackendStartPort(settings?.backendStartPort),
+    retainScreenshotImages: settings?.retainScreenshotImages !== false
   }
 }

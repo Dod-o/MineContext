@@ -73,6 +73,9 @@ class ScreenshotProcessor(BaseContextProcessor):
         self._normalize_hdr_screenshots = self.config.get("normalize_hdr_screenshots", True)
         self._enabled_delete = self.config.get("enabled_delete", False)
         self._image_retention = self.config.get("image_retention", {})
+        self._delete_after_processing = bool(
+            self._image_retention.get("delete_after_processing", False)
+        )
         self._last_image_cleanup_at = 0.0
 
         self._stop_event = threading.Event()
@@ -202,6 +205,48 @@ class ScreenshotProcessor(BaseContextProcessor):
         if result["errors"]:
             logger.warning(f"Image retention cleanup skipped {len(result['errors'])} files")
 
+    def _strip_processed_image_paths(
+        self, processed_contexts: List[ProcessedContext]
+    ) -> List[str]:
+        if not self._delete_after_processing:
+            return []
+
+        image_paths = []
+        seen_paths = set()
+        for context in processed_contexts:
+            for raw_property in context.properties.raw_properties:
+                if raw_property.source != ContextSource.SCREENSHOT:
+                    continue
+                if not raw_property.content_path:
+                    continue
+                image_path = raw_property.content_path
+                if image_path not in seen_paths:
+                    image_paths.append(image_path)
+                    seen_paths.add(image_path)
+                raw_property.content_path = None
+                raw_property.additional_info = {
+                    **(raw_property.additional_info or {}),
+                    "image_retained": False,
+                }
+
+        return image_paths
+
+    def _delete_processed_image_files(self, image_paths: List[str]) -> None:
+        if not image_paths:
+            return
+
+        deleted_count = 0
+        for image_path in image_paths:
+            try:
+                if os.path.exists(image_path):
+                    os.remove(image_path)
+                    deleted_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete processed screenshot file {image_path}: {e}")
+
+        if deleted_count:
+            logger.info(f"Deleted {deleted_count} processed screenshot files after semantic extraction")
+
     def _is_duplicate(self, new_context: RawContextProperties) -> bool:
         """
         Real-time deduplication of incoming screenshots after image compression.
@@ -316,7 +361,9 @@ class ScreenshotProcessor(BaseContextProcessor):
             try:
                 processed_contexts =  asyncio.run(self.batch_process(unprocessed_contexts))
                 if processed_contexts:
+                    processed_image_paths = self._strip_processed_image_paths(processed_contexts)
                     get_storage().batch_upsert_processed_context(processed_contexts)
+                    self._delete_processed_image_files(processed_image_paths)
             except Exception as e:
                 error_msg = f"Failed during concurrent VLM processing: {e}"
                 logger.error(error_msg)

@@ -112,6 +112,15 @@ class ConfigManager:
             screenshot_config = capture_config.setdefault("screenshot", {})
             screenshot_config["storage_path"] = str(Path(screenshot_dir).expanduser().resolve())
 
+        retain_screenshot_images = os.getenv("OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES")
+        if retain_screenshot_images is not None:
+            processing_config = self._config.setdefault("processing", {})
+            screenshot_processor_config = processing_config.setdefault("screenshot_processor", {})
+            retention_config = screenshot_processor_config.setdefault("image_retention", {})
+            retention_config["delete_after_processing"] = (
+                retain_screenshot_images.strip().lower() in {"0", "false", "no", "off"}
+            )
+
     def get_config(self) -> Optional[Dict[str, Any]]:
         """
         Get configuration

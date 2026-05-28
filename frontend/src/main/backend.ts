@@ -656,12 +656,14 @@ async function startBackendServer(mainWindow: BrowserWindow) {
       const systemLocale = app.getLocale()
       const runtimeSettings = appRuntimeSettingsService.getSettings()
       const customScreenshotDirectory = runtimeSettings.screenshotDirectory
+      const retainScreenshotImages = runtimeSettings.retainScreenshotImages !== false
       const env = {
         ...process.env,
         CONTEXT_PATH: resolveAppDataRoot(),
         ...(customScreenshotDirectory
           ? { OPENCONTEXT_SCREENSHOT_DIR: path.resolve(customScreenshotDirectory) }
           : {}),
+        OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES: retainScreenshotImages ? 'true' : 'false',
         OPENCONTEXT_SYSTEM_LOCALE: systemLocale,
         OPENCONTEXT_PROMPT_LANGUAGE:
           process.env.OPENCONTEXT_PROMPT_LANGUAGE || resolvePromptLanguageFromLocale(systemLocale)
@@ -672,10 +674,10 @@ async function startBackendServer(mainWindow: BrowserWindow) {
 
       is.dev
         ? console.log(
-            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}`
+            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}, OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES=${env.OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES}`
           )
         : logToBackendFile(
-            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}`
+            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}, OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES=${env.OPENCONTEXT_RETAIN_SCREENSHOT_IMAGES}`
           )
 
       // Start backend with SQLite configuration

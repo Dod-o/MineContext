@@ -654,9 +654,33 @@ const Settings: FC<SettingsProps> = (props) => {
                     className="!w-[140px]"
                   />
                 </div>
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                      Keep raw screenshot files
+                    </div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      Turn off to keep only semantic summaries and vectors after processing.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={runtimeSettings.retainScreenshotImages}
+                    onChange={(checked) =>
+                      setRuntimeSettings((settings) => ({
+                        ...settings,
+                        retainScreenshotImages: checked
+                      }))
+                    }
+                  />
+                </div>
                 {currentBackendPort && runtimeSettings.backendStartPort !== currentBackendPort && (
                   <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
                     Current backend port: {currentBackendPort}. Port changes apply after app restart.
+                  </div>
+                )}
+                {!runtimeSettings.retainScreenshotImages && (
+                  <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                    Raw screenshot retention changes apply after app restart.
                   </div>
                 )}
               </div>

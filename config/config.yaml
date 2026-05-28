@@ -99,6 +99,7 @@ processing:
       max_total_size_mb: 2048 # Keep total local image data under this size
       max_file_count: 10000 # Keep only the newest image files once this count is exceeded
       cleanup_interval_hours: 24 # Scheduled cleanup interval while processing screenshots
+      delete_after_processing: false # Optional semantic-only mode: remove raw screenshots after successful processing
 
   # Context merger configuration
   context_merger:
