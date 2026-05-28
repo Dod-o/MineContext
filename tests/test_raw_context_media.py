@@ -18,12 +18,17 @@ from opencontext.utils.raw_context_media import (
 class RawContextMediaTest(unittest.TestCase):
     def setUp(self):
         self._old_context_path = os.environ.get("CONTEXT_PATH")
+        self._old_screenshot_dir = os.environ.get("OPENCONTEXT_SCREENSHOT_DIR")
 
     def tearDown(self):
         if self._old_context_path is None:
             os.environ.pop("CONTEXT_PATH", None)
         else:
             os.environ["CONTEXT_PATH"] = self._old_context_path
+        if self._old_screenshot_dir is None:
+            os.environ.pop("OPENCONTEXT_SCREENSHOT_DIR", None)
+        else:
+            os.environ["OPENCONTEXT_SCREENSHOT_DIR"] = self._old_screenshot_dir
 
     def test_encodes_media_path_into_url_safe_token(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -87,6 +92,19 @@ class RawContextMediaTest(unittest.TestCase):
 
                 with self.assertRaises(PermissionError):
                     validate_context_media_path(image_path, roots)
+
+    def test_validate_context_media_path_allows_custom_screenshot_dir(self):
+        with tempfile.TemporaryDirectory() as context_dir:
+            os.environ["CONTEXT_PATH"] = context_dir
+            with tempfile.TemporaryDirectory() as screenshot_dir:
+                os.environ["OPENCONTEXT_SCREENSHOT_DIR"] = screenshot_dir
+                image_path = Path(screenshot_dir) / "activity" / "shot.png"
+                image_path.parent.mkdir()
+                image_path.write_bytes(b"png")
+
+                roots = get_context_media_roots(Path.cwd())
+
+                self.assertEqual(validate_context_media_path(image_path, roots), image_path.resolve())
 
 
 if __name__ == "__main__":

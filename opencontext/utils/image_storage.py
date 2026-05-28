@@ -42,6 +42,7 @@ def get_image_storage_roots(config: Optional[Dict[str, Any]] = None) -> List[Pat
 
     screenshot_config = config.get("capture", {}).get("screenshot", {})
     _append_root(roots, screenshot_config.get("storage_path"), context_path)
+    _append_root(roots, os.getenv("OPENCONTEXT_SCREENSHOT_DIR"), context_path)
 
     context_root = resolve_context_path(context_path, context_path)
     for relative_path in (

@@ -7,6 +7,8 @@ export enum IpcChannel {
   App_GetLaunchOnBoot = 'app:get-launch-on-boot',
   App_SetLaunchOnBoot = 'app:set-launch-on-boot',
   App_GetTheme = 'app:get-theme',
+  App_GetRuntimeSettings = 'app:get-runtime-settings',
+  App_SetRuntimeSettings = 'app:set-runtime-settings',
   App_SetLanguage = 'app:set-language',
   App_SetEnableSpellCheck = 'app:set-enable-spell-check',
   App_SetSpellCheckLanguages = 'app:set-spell-check-languages',

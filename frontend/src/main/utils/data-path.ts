@@ -18,3 +18,11 @@ export function resolveAppDataRoot(): string {
 export function resolveSqliteDbPath(dbName = 'app.db'): string {
   return path.join(resolveAppDataRoot(), 'persist', 'sqlite', dbName)
 }
+
+export function resolveDefaultScreenshotActivityRoot(): string {
+  if (app.isPackaged || !is.dev) {
+    return path.join(resolveAppDataRoot(), 'Data', 'screenshot', 'activity')
+  }
+
+  return path.join(resolveAppDataRoot(), 'screenshot', 'activity')
+}

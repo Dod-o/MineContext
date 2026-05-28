@@ -20,6 +20,7 @@ import screenshotService from './services/ScreenshotService'
 import { isDev, isMac } from './constant'
 import icon from '../../resources/icon.png?asset'
 import { startBackendInBackground, stopBackendServerSync } from './backend'
+import { appRuntimeSettingsService } from './services/AppRuntimeSettingsService'
 import { powerWatcher } from './background/os/Power'
 import { initLog } from '@shared/logger/init'
 import { getLogger } from '@shared/logger/main'
@@ -214,17 +215,20 @@ app.whenReady().then(() => {
       // (`connect-src *`) makes any future renderer XSS a full local-file
       // exfiltration primitive. We also realpath() the resolved path so a
       // symlink planted inside userData cannot be used to escape the sandbox.
-      const allowedRoot =
-        !app.isPackaged && is.dev
-          ? path.resolve('.')
-          : path.resolve(app.getPath('userData'))
+      const allowedRoots = [
+        !app.isPackaged && is.dev ? path.resolve('.') : path.resolve(app.getPath('userData')),
+        appRuntimeSettingsService.resolveScreenshotActivityRoot()
+      ]
       const realPath = fs.realpathSync(resolved)
-      const isUnderRoot =
-        realPath === allowedRoot || realPath.startsWith(allowedRoot + path.sep)
+      const isUnderRoot = allowedRoots.some((root) => {
+        const resolvedRoot = fs.existsSync(root) ? fs.realpathSync(root) : path.resolve(root)
+        const relativePath = path.relative(resolvedRoot, realPath)
+        return relativePath === '' || (!!relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+      })
 
       if (!isUnderRoot) {
         console.error(
-          `vikingdb:// blocked path outside allowed root: ${realPath} (root: ${allowedRoot})`
+          `vikingdb:// blocked path outside allowed roots: ${realPath} (roots: ${allowedRoots.join(', ')})`
         )
         callback({ error: -10 /* net::ERR_ACCESS_DENIED */ })
         return

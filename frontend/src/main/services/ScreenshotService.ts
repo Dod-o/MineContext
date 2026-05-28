@@ -1,15 +1,17 @@
 // Copyright (c) 2025 Beijing Volcano Engine Technology Co., Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
-import { app, desktopCapturer, shell, systemPreferences } from 'electron'
+import { desktopCapturer, shell, systemPreferences } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getLogger } from '@shared/logger/main'
-import { isDev, isMac } from '@main/constant'
+import { isMac } from '@main/constant'
 import { getCacheDir } from '@main/utils/file'
 import { CaptureSourcesTools } from '@main/utils/get-capture-sources'
 import dayjs, { Dayjs } from 'dayjs'
 import { get } from 'lodash'
+
+import { appRuntimeSettingsService } from './AppRuntimeSettingsService'
 
 const logger = getLogger('ScreenshotService')
 
@@ -70,15 +72,11 @@ class ScreenshotService extends CaptureSourcesTools {
           return { success: false, error: 'Empty thumbnail buffer' }
         }
         const timestamp = batchTime || dayjs()
-        const userDataPath = app.getPath('userData')
         const time = timestamp.format('YYYY-MM-DD')
         const currentTime = timestamp.format('HH-mm-ss')
         // const timestamp = dayjs().valueOf()
         const appName = get(source, 'sourceName', sourceId.split(':').join('-'))
-        const activityPath = !isDev
-          ? path.join(userDataPath, 'Data', 'screenshot', 'activity', time, currentTime)
-          : path.join(process.cwd(), 'backend', 'screenshot', 'activity', time, currentTime)
-        console.log(activityPath)
+        const activityPath = path.join(appRuntimeSettingsService.resolveScreenshotActivityRoot(), time, currentTime)
         await fs.promises.mkdir(activityPath, { recursive: true })
         const filePath = path.join(
           activityPath,
@@ -118,9 +116,8 @@ class ScreenshotService extends CaptureSourcesTools {
    */
   async getScreenshotsByDate(date?: string): Promise<{ success: boolean; screenshots?: any[]; error?: string }> {
     try {
-      const userDataPath = app.getPath('userData')
       const dateString = date || dayjs().format('YYYYMMDD')
-      const activityPath = path.join(userDataPath, 'Data', 'screenshot', 'activity', dateString)
+      const activityPath = path.join(appRuntimeSettingsService.resolveScreenshotActivityRoot(), dateString)
 
       // Check if the directory exists
       if (!fs.existsSync(activityPath)) {
@@ -278,8 +275,7 @@ class ScreenshotService extends CaptureSourcesTools {
     retentionDays: number = 15
   ): Promise<{ success: boolean; deletedCount?: number; deletedSize?: number; error?: string }> {
     try {
-      const userDataPath = app.getPath('userData')
-      const screenshotBasePath = path.join(userDataPath, 'Data', 'screenshot', 'activity')
+      const screenshotBasePath = appRuntimeSettingsService.resolveScreenshotActivityRoot()
 
       // Check if directory exists
       if (!fs.existsSync(screenshotBasePath)) {

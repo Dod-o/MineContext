@@ -13,11 +13,13 @@ import { IpcChannel } from '@shared/IpcChannel'
 import { is } from '@electron-toolkit/utils'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
 import { resolveAppDataRoot } from './utils/data-path'
+import { DEFAULT_BACKEND_START_PORT } from '@shared/app-runtime-settings'
+import { appRuntimeSettingsService } from './services/AppRuntimeSettingsService'
 
 let backendLogFile: string | null = null
 let backendProcess: any = null
 let backendOwnedByThisProcess = false
-let backendPort = 1733 // Dynamic port, starting from 1733
+let backendPort = DEFAULT_BACKEND_START_PORT // Dynamic port, starting from the configured preference
 let backendStatus: 'starting' | 'running' | 'stopped' | 'error' = 'stopped' // Backend service status
 let ensureBackendRunningPromise: Promise<void> | null = null
 
@@ -205,6 +207,10 @@ function normalizePathForCompare(value: string): string {
 
 function getExpectedContextPath(): string {
   return resolveAppDataRoot()
+}
+
+function getPreferredBackendStartPort(): number {
+  return appRuntimeSettingsService.getBackendStartPort()
 }
 
 function backendUsesExpectedContextPath(healthCheckResult: unknown): boolean {
@@ -521,7 +527,8 @@ export async function ensureBackendRunning(mainWindow: BrowserWindow) {
     }
 
     // Try to reuse already-running backend first (e.g. after abnormal exit or external startup).
-    const existingBackend = await findRunningBackendPort(1733, 20)
+    const preferredBackendStartPort = getPreferredBackendStartPort()
+    const existingBackend = await findRunningBackendPort(preferredBackendStartPort, 20)
     if (existingBackend) {
       backendPort = existingBackend.port
       backendOwnedByThisProcess = false
@@ -559,7 +566,8 @@ async function startBackendServer(mainWindow: BrowserWindow) {
 
   // First, find an available port
   try {
-    backendPort = await findAvailablePort(1733)
+    const preferredBackendStartPort = getPreferredBackendStartPort()
+    backendPort = await findAvailablePort(preferredBackendStartPort)
     logToBackendFile(`Selected backend port: ${backendPort}`)
   } catch (error: any) {
     logToBackendFile(`Failed to find available port: ${error.message}`)
@@ -646,9 +654,14 @@ async function startBackendServer(mainWindow: BrowserWindow) {
 
       // Prepare environment variables
       const systemLocale = app.getLocale()
+      const runtimeSettings = appRuntimeSettingsService.getSettings()
+      const customScreenshotDirectory = runtimeSettings.screenshotDirectory
       const env = {
         ...process.env,
         CONTEXT_PATH: resolveAppDataRoot(),
+        ...(customScreenshotDirectory
+          ? { OPENCONTEXT_SCREENSHOT_DIR: path.resolve(customScreenshotDirectory) }
+          : {}),
         OPENCONTEXT_SYSTEM_LOCALE: systemLocale,
         OPENCONTEXT_PROMPT_LANGUAGE:
           process.env.OPENCONTEXT_PROMPT_LANGUAGE || resolvePromptLanguageFromLocale(systemLocale)
@@ -659,10 +672,10 @@ async function startBackendServer(mainWindow: BrowserWindow) {
 
       is.dev
         ? console.log(
-            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}`
+            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}`
           )
         : logToBackendFile(
-            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}`
+            `Starting backend with command: ${backendPath} ${args.join(' ')}, Working dir: ${backendDir}, Environment: CONTEXT_PATH=${env.CONTEXT_PATH}, OPENCONTEXT_SCREENSHOT_DIR=${env.OPENCONTEXT_SCREENSHOT_DIR || ''}`
           )
 
       // Start backend with SQLite configuration

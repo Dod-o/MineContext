@@ -13,8 +13,10 @@ import { IpcChannel } from '@shared/IpcChannel'
 import { BrowserWindow, dialog, ipcMain, ProxyConfig, session, shell, systemPreferences } from 'electron'
 import { Notification } from 'src/renderer/src/types/notification'
 import type { ThemeMode } from '@shared/theme'
+import type { AppRuntimeSettings } from '@shared/app-runtime-settings'
 
 import appService from './services/AppService'
+import { appRuntimeSettingsService } from './services/AppRuntimeSettingsService'
 import { fileStorage as fileManager } from './services/FileStorage'
 // import FileService from './services/FileSystemService'
 import { NotificationService } from './services/NotificationService'
@@ -113,6 +115,10 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   themeService.init()
   ipcMain.handle(IpcChannel.App_GetTheme, () => themeService.getTheme())
   ipcMain.handle(IpcChannel.App_SetTheme, (_, mode: ThemeMode) => themeService.setTheme(mode))
+  ipcMain.handle(IpcChannel.App_GetRuntimeSettings, () => appRuntimeSettingsService.getSettings())
+  ipcMain.handle(IpcChannel.App_SetRuntimeSettings, (_, settings: Partial<AppRuntimeSettings>) =>
+    appRuntimeSettingsService.setSettings(settings)
+  )
 
   //only for mac
   if (isMac) {

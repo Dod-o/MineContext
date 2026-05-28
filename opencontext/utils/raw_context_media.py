@@ -72,6 +72,10 @@ def get_context_media_roots(project_root: Path) -> list[Path]:
     if context_path:
         roots.append(Path(context_path))
 
+    screenshot_dir = os.getenv("OPENCONTEXT_SCREENSHOT_DIR")
+    if screenshot_dir:
+        roots.append(Path(screenshot_dir))
+
     resolved_roots = []
     for root in roots:
         try:

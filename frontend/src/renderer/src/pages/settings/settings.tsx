@@ -2,9 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { FC, useMemo, useEffect, useState } from 'react'
-import { Form, Button, Select, Input, Typography, Spin, Message, Switch, Radio } from '@arco-design/web-react'
+import { Form, Button, Select, Input, Typography, Spin, Message, Switch, Radio, InputNumber } from '@arco-design/web-react'
+import { IconFolder, IconRefresh, IconSave } from '@arco-design/web-react/icon'
 import { find, get, isEmpty, pick } from 'lodash'
 import type { ThemeMode } from '@shared/theme'
+import {
+  defaultAppRuntimeSettings,
+  MAX_BACKEND_START_PORT,
+  MIN_BACKEND_START_PORT,
+  type AppRuntimeSettings
+} from '@shared/app-runtime-settings'
 
 import ModelRadio from './components/modelRadio/model-radio'
 import { ModelTypeList, BaseUrl, embeddingModels, ModelInfoList } from './constants'
@@ -236,6 +243,9 @@ const Settings: FC<SettingsProps> = (props) => {
   const [launchOnBootLoading, setLaunchOnBootLoading] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [themeLoading, setThemeLoading] = useState(false)
+  const [runtimeSettings, setRuntimeSettings] = useState<AppRuntimeSettings>(defaultAppRuntimeSettings)
+  const [runtimeSettingsSaving, setRuntimeSettingsSaving] = useState(false)
+  const [currentBackendPort, setCurrentBackendPort] = useState<number>()
   const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
   const [selectedProfileName, setSelectedProfileName] = useState<string>()
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
@@ -365,6 +375,10 @@ const Settings: FC<SettingsProps> = (props) => {
         setLaunchOnBoot(Boolean(enabled))
         const theme = await window.api.getTheme()
         setThemeMode(theme.mode)
+        const settings = await window.api.getRuntimeSettings()
+        setRuntimeSettings(settings)
+        const backendStatus = await window.api.getBackendStatus()
+        setCurrentBackendPort(backendStatus.port)
       } catch (error) {
         console.error('Failed to load app settings', error)
       }
@@ -392,6 +406,35 @@ const Settings: FC<SettingsProps> = (props) => {
       Message.error('Failed to update theme setting')
     } finally {
       setThemeLoading(false)
+    }
+  })
+
+  const handleSelectScreenshotDirectory = useMemoizedFn(async () => {
+    const selectedDirectory = await window.api.selectPath({
+      title: 'Select screenshot directory',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (selectedDirectory) {
+      setRuntimeSettings((settings) => ({
+        ...settings,
+        screenshotDirectory: selectedDirectory
+      }))
+    }
+  })
+
+  const handleSaveRuntimeSettings = useMemoizedFn(async () => {
+    setRuntimeSettingsSaving(true)
+    try {
+      const nextSettings = await window.api.setRuntimeSettings(runtimeSettings)
+      setRuntimeSettings(nextSettings)
+      Message.success('Local storage settings saved')
+      if (currentBackendPort && nextSettings.backendStartPort !== currentBackendPort) {
+        Message.info(`Backend port changes take effect after app restart. Current port: ${currentBackendPort}`)
+      }
+    } catch (error: any) {
+      Message.error(get(error, 'message') || 'Failed to save local storage settings')
+    } finally {
+      setRuntimeSettingsSaving(false)
     }
   })
 
@@ -445,6 +488,79 @@ const Settings: FC<SettingsProps> = (props) => {
                     <Radio value="dark">Dark</Radio>
                   </Radio.Group>
                 </Spin>
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Local storage</div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      Choose where screenshots are saved and which backend port MineContext tries first.
+                    </div>
+                  </div>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<IconSave />}
+                    loading={runtimeSettingsSaving}
+                    onClick={handleSaveRuntimeSettings}>
+                    Save
+                  </Button>
+                </div>
+                <div className="mb-3 flex items-center gap-2">
+                  <Input
+                    value={runtimeSettings.screenshotDirectory}
+                    placeholder="Default screenshot directory"
+                    allowClear
+                    onChange={(value) =>
+                      setRuntimeSettings((settings) => ({
+                        ...settings,
+                        screenshotDirectory: value
+                      }))
+                    }
+                    className="flex-1"
+                  />
+                  <Button icon={<IconFolder />} onClick={handleSelectScreenshotDirectory}>
+                    Browse
+                  </Button>
+                  <Button
+                    icon={<IconRefresh />}
+                    onClick={() =>
+                      setRuntimeSettings((settings) => ({
+                        ...settings,
+                        screenshotDirectory: ''
+                      }))
+                    }>
+                    Default
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Backend start port</div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      MineContext will use this port first, then scan upward if it is occupied.
+                    </div>
+                  </div>
+                  <InputNumber
+                    min={MIN_BACKEND_START_PORT}
+                    max={MAX_BACKEND_START_PORT}
+                    precision={0}
+                    value={runtimeSettings.backendStartPort}
+                    onChange={(value) =>
+                      setRuntimeSettings((settings) => ({
+                        ...settings,
+                        backendStartPort: Number(value) || defaultAppRuntimeSettings.backendStartPort
+                      }))
+                    }
+                    className="!w-[140px]"
+                  />
+                </div>
+                {currentBackendPort && runtimeSettings.backendStartPort !== currentBackendPort && (
+                  <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                    Current backend port: {currentBackendPort}. Port changes apply after app restart.
+                  </div>
+                )}
               </div>
             )}
             {!init && modelProfiles.length > 0 && (

@@ -10,6 +10,7 @@ import { Notification } from 'src/renderer/src/types/notification'
 import { serverPushAPI } from './server-push-api'
 import { CaptureSource } from '@interface/common/source'
 import type { ThemeMode, ThemeState } from '@shared/theme'
+import type { AppRuntimeSettings } from '@shared/app-runtime-settings'
 
 import { VaultDocumentType } from '@shared/enums/global-enum'
 import type { ScreenSettings } from '@shared/screen-settings'
@@ -44,6 +45,16 @@ const api = {
   cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload),
   getTheme: (): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_GetTheme),
   setTheme: (mode: ThemeMode): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_SetTheme, mode),
+  getRuntimeSettings: (): Promise<AppRuntimeSettings> => ipcRenderer.invoke(IpcChannel.App_GetRuntimeSettings),
+  setRuntimeSettings: (settings: Partial<AppRuntimeSettings>): Promise<AppRuntimeSettings> =>
+    ipcRenderer.invoke(IpcChannel.App_SetRuntimeSettings, settings),
+  selectPath: (options: Electron.OpenDialogOptions): Promise<string | null> =>
+    ipcRenderer.invoke(IpcChannel.App_Select, options),
+  resolvePath: (filePath: string): Promise<string> => ipcRenderer.invoke(IpcChannel.App_ResolvePath, filePath),
+  hasWritePermission: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannel.App_HasWritePermission, filePath),
+  getBackendStatus: (): Promise<{ status: string; port: number; timestamp: string }> =>
+    ipcRenderer.invoke(IpcChannel.Backend_GetStatus),
   onThemeUpdated: (callback: (state: ThemeState) => void) => {
     const wrappedCallback = (_event: Electron.IpcRendererEvent, state: ThemeState) => callback(state)
     ipcRenderer.on(IpcChannel.ThemeUpdated, wrappedCallback)

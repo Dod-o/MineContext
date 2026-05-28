@@ -12,6 +12,7 @@ Configuration manager, responsible for loading and managing system configuration
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
@@ -56,6 +57,7 @@ class ConfigManager:
         self._config_path = found_config_path
         logger.info(f"Configuration loaded successfully: {self._config_path}")
         self.load_user_settings()
+        self._apply_env_overrides()
 
         return True
 
@@ -98,6 +100,17 @@ class ConfigManager:
             return re.sub(pattern, replace_match, config_data)
         else:
             return config_data
+
+    def _apply_env_overrides(self) -> None:
+        """Apply runtime environment overrides that are not expressible in YAML defaults."""
+        if not self._config:
+            return
+
+        screenshot_dir = os.getenv("OPENCONTEXT_SCREENSHOT_DIR")
+        if screenshot_dir:
+            capture_config = self._config.setdefault("capture", {})
+            screenshot_config = capture_config.setdefault("screenshot", {})
+            screenshot_config["storage_path"] = str(Path(screenshot_dir).expanduser().resolve())
 
     def get_config(self) -> Optional[Dict[str, Any]]:
         """
