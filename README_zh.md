@@ -124,6 +124,28 @@ MineContext 非常注重用户隐私，所有数据都默认保存在本地如�
 应用程序启动后（首次运行时需要安装后端环境，约需等待两分钟），请根据引导输入您的 API 密钥。目前我们支持豆包、OpenAI 以及自定义模型服务，包括任何兼容 OpenAI API 格式的**本地模型**或**第三方模型**服务。
 我们推荐使用 [LMStudio](https://lmstudio.ai/) 来运行本地模型，它提供了简单的界面和强大的功能，能够帮助您快速部署和管理本地模型。
 
+### 使用 LM Studio 或 Ollama
+
+MineContext 会把截图发送给视觉语言模型进行理解，因此本地只部署普通文本聊天模型是不够的。请先确认本地服务提供的模型支持通过 OpenAI 兼容接口接收图片输入；向量模型可以单独使用本地或云端服务。
+
+在【Settings -> Model platform】选择【Custom】，可以按下面方式填写：
+
+| 字段 | LM Studio | Ollama |
+| --- | --- | --- |
+| 视觉语言模型 | LM Studio 中已加载的视觉模型 ID | 已拉取的视觉模型名称 |
+| Base URL | `http://127.0.0.1:1234/v1` | `http://127.0.0.1:11434/v1` |
+| API Key | 本地服务不要求时可留空 | 可留空，或填写本地服务接受的占位值 |
+| Embedding provider | 本地提供 `/v1/embeddings` 时选 `OpenAI compatible`，否则使用豆包/OpenAI/阿里云 | 本地提供向量接口时选 `OpenAI compatible`，否则使用豆包/OpenAI/阿里云 |
+| Embedding base URL | 提供 `/v1/embeddings` 的本地服务地址 | 使用 Ollama 向量模型时填写 `http://127.0.0.1:11434/v1` |
+| Embedding model | 本地向量模型 ID | 已拉取的向量模型名称 |
+
+本地模型排查清单：
+
+1. 先启动本地模型服务，再启动 MineContext 或保存模型设置。
+2. 截图理解必须使用支持图片输入的视觉模型。如果 LM Studio 报错 `Vision add-on is not loaded, but images were provided for processing`，说明当前模型或运行时没有启用视觉能力，需要切换到支持图片输入的视觉模型/运行时并重启本地服务。
+3. 向量模型需要支持 OpenAI 兼容的 embeddings 接口。如果本地运行时只提供聊天或视觉模型接口，可以继续使用豆包、OpenAI、阿里云或其他兼容的向量服务。
+4. Base URL 建议保留 `/v1` 后缀，避免走到本地运行时的非 OpenAI 兼容路由。
+
 **综合成本和性能，我们推荐使用豆包模型**，豆包模型的 API-Key 可以在 [API 管理界面](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey) 生成。
 
 获取豆包 API 之后需要在 [模型开通管理界面](https://console.volcengine.com/ark/region:ark+cn-beijing/model) 开通视觉语言模型和向量化两个模型。
