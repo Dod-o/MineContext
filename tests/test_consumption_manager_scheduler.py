@@ -28,12 +28,17 @@ spec.loader.exec_module(consumption_manager_module)
 ConsumptionManager = consumption_manager_module.ConsumptionManager
 
 
-class _FakeTimer:
-    def __init__(self):
-        self.cancelled = False
+class _FakeThread:
+    def __init__(self, alive=True):
+        self._alive = alive
+        self.join_calls = 0
 
-    def cancel(self):
-        self.cancelled = True
+    def is_alive(self):
+        return self._alive
+
+    def join(self, timeout=None):
+        self.join_calls += 1
+        self._alive = False
 
 
 class ConsumptionManagerSchedulerTest(unittest.TestCase):
@@ -43,7 +48,8 @@ class ConsumptionManagerSchedulerTest(unittest.TestCase):
         manager._scheduled_tasks_enabled = True
         manager._scheduled_tasks_paused = False
         manager._scheduler_pause_reasons = set()
-        manager._task_timers = {"tips": _FakeTimer()}
+        manager._task_stop_events = {"tips": threading.Event()}
+        manager._task_threads = {"tips": _FakeThread()}
         manager._task_intervals = {"activity": 900, "tips": 3600, "todos": 1800}
         manager._task_enabled = {
             "activity": True,
@@ -63,10 +69,12 @@ class ConsumptionManagerSchedulerTest(unittest.TestCase):
 
     def test_pause_cancels_timers_and_resume_waits_for_all_reasons(self):
         manager = self._build_manager()
-        timer = manager._task_timers["tips"]
+        stop_event = manager._task_stop_events["tips"]
+        task_thread = manager._task_threads["tips"]
 
         paused = manager.pause_scheduled_tasks("lock-screen")
-        self.assertTrue(timer.cancelled)
+        self.assertTrue(stop_event.is_set())
+        self.assertEqual(task_thread.join_calls, 1)
         self.assertFalse(paused["enabled"])
         self.assertTrue(paused["paused"])
         self.assertEqual(paused["pause_reasons"], ["lock-screen"])
@@ -83,6 +91,54 @@ class ConsumptionManagerSchedulerTest(unittest.TestCase):
         self.assertFalse(resumed["paused"])
         self.assertEqual(resumed["pause_reasons"], [])
         self.assertEqual(manager.start_count, 1)
+
+    def test_interval_check_has_minimum_delay(self):
+        manager = self._build_manager()
+        manager._task_intervals["activity"] = 1
+
+        self.assertEqual(manager._calculate_check_interval("activity"), 1)
+
+    def test_recurring_task_replaces_existing_thread(self):
+        manager = self._build_manager()
+        manager._task_stop_events = {}
+        manager._task_threads = {}
+
+        created_threads = []
+
+        class FakeCreatedThread:
+            def __init__(self, target, args, name, daemon):
+                self.target = target
+                self.args = args
+                self.name = name
+                self.daemon = daemon
+                self.started = False
+
+            def start(self):
+                self.started = True
+                created_threads.append(self)
+
+            def is_alive(self):
+                return False
+
+            def join(self, timeout=None):
+                pass
+
+        original_thread = consumption_manager_module.threading.Thread
+        try:
+            consumption_manager_module.threading.Thread = FakeCreatedThread
+
+            manager._start_recurring_task("activity", lambda: None, lambda: 5)
+            first_stop_event = manager._task_stop_events["activity"]
+            manager._start_recurring_task("activity", lambda: None, lambda: 5)
+        finally:
+            consumption_manager_module.threading.Thread = original_thread
+
+        self.assertEqual(len(created_threads), 2)
+        self.assertTrue(first_stop_event.is_set())
+        self.assertEqual(list(manager._task_threads.keys()), ["activity"])
+        self.assertEqual(created_threads[-1].name, "minecontext-activity-scheduler")
+        self.assertTrue(created_threads[-1].daemon)
+        self.assertTrue(created_threads[-1].started)
 
 
 if __name__ == "__main__":

@@ -60,7 +60,8 @@ class ConsumptionManager:
         self._scheduled_tasks_enabled = False
         self._scheduled_tasks_paused = False
         self._scheduler_pause_reasons = set()
-        self._task_timers: Dict[str, threading.Timer] = {}
+        self._task_threads: Dict[str, threading.Thread] = {}
+        self._task_stop_events: Dict[str, threading.Event] = {}
         self._task_intervals = {
             "activity": content_gen_config.get("activity", {}).get("interval", 900),
             "tips": content_gen_config.get("tips", {}).get("interval", 3600),
@@ -157,16 +158,30 @@ class ConsumptionManager:
 
     def stop_scheduled_tasks(self):
         """Stop scheduled tasks"""
-        if not self._scheduled_tasks_enabled:
+        if (
+            not self._scheduled_tasks_enabled
+            and not self._task_threads
+            and not self._task_stop_events
+        ):
             return
 
         self._scheduled_tasks_enabled = False
 
-        # Cancel all timers
-        for timer in self._task_timers.values():
-            if timer:
-                timer.cancel()
-        self._task_timers.clear()
+        # Stop scheduler threads
+        for stop_event in self._task_stop_events.values():
+            stop_event.set()
+
+        current_thread = threading.current_thread()
+        for task_name, task_thread in list(self._task_threads.items()):
+            if task_thread is current_thread:
+                continue
+            if task_thread.is_alive():
+                task_thread.join(timeout=2.0)
+                if task_thread.is_alive():
+                    logger.warning(f"{task_name} scheduler thread did not stop within timeout")
+
+        self._task_threads.clear()
+        self._task_stop_events.clear()
 
         logger.info("Scheduled tasks stopped")
 
@@ -276,13 +291,12 @@ class ConsumptionManager:
             except Exception as e:
                 logger.error(f"Failed to check daily report generation time: {e}")
 
-            if self._scheduled_tasks_enabled and self._task_enabled.get("report", True):
-                self._task_timers["report"] = threading.Timer(
-                    60 * 30, check_and_generate_daily_report
-                )
-                self._task_timers["report"].start()
-
-        check_and_generate_daily_report()
+        self._start_recurring_task(
+            "report",
+            check_and_generate_daily_report,
+            lambda: 60 * 30,
+            immediate=True,
+        )
 
     def _get_daily_report_range(self, now: datetime) -> tuple[int, int]:
         report_date = (now - timedelta(days=1)).date()
@@ -320,11 +334,12 @@ class ConsumptionManager:
             except Exception as e:
                 logger.exception(f"Failed to generate activity record: {e}")
 
-            self._schedule_next_check("activity", generate_activity)
-
         check_interval = self._calculate_check_interval("activity")
-        self._task_timers["activity"] = threading.Timer(check_interval, generate_activity)
-        self._task_timers["activity"].start()
+        self._start_recurring_task(
+            "activity",
+            generate_activity,
+            lambda: self._calculate_check_interval("activity"),
+        )
         logger.info(
             f"Activity timer started, check interval: {check_interval}s, generation interval: {self._task_intervals['activity']}s"
         )
@@ -357,11 +372,12 @@ class ConsumptionManager:
             except Exception as e:
                 logger.exception(f"Failed to generate smart tip: {e}")
 
-            self._schedule_next_check("tips", generate_tips)
-
         check_interval = self._calculate_check_interval("tips")
-        self._task_timers["tips"] = threading.Timer(check_interval, generate_tips)
-        self._task_timers["tips"].start()
+        self._start_recurring_task(
+            "tips",
+            generate_tips,
+            lambda: self._calculate_check_interval("tips"),
+        )
         logger.info(
             f"Tips timer started, check interval: {check_interval}s, generation interval: {self._task_intervals['tips']}s"
         )
@@ -396,11 +412,12 @@ class ConsumptionManager:
             except Exception as e:
                 logger.exception(f"Failed to generate smart todo: {e}")
 
-            self._schedule_next_check("todos", generate_todos)
-
         check_interval = self._calculate_check_interval("todos")
-        self._task_timers["todos"] = threading.Timer(check_interval, generate_todos)
-        self._task_timers["todos"].start()
+        self._start_recurring_task(
+            "todos",
+            generate_todos,
+            lambda: self._calculate_check_interval("todos"),
+        )
         logger.info(
             f"Todos timer started, check interval: {check_interval}s, generation interval: {self._task_intervals['todos']}s"
         )
@@ -410,14 +427,49 @@ class ConsumptionManager:
         interval = self._task_intervals.get(task_name, 900)
         limits = {"activity": 180, "tips": 200, "todos": 250}
         max_check = limits.get(task_name, 180)
-        return min(max_check, interval // 4)
+        return max(1, min(max_check, interval // 4))
 
-    def _schedule_next_check(self, task_name: str, callback) -> None:
-        """Schedule next check for a task"""
-        if self._scheduled_tasks_enabled and self._task_enabled.get(task_name, True):
-            check_interval = self._calculate_check_interval(task_name)
-            self._task_timers[task_name] = threading.Timer(check_interval, callback)
-            self._task_timers[task_name].start()
+    def _start_recurring_task(self, task_name: str, callback, interval_provider, immediate=False):
+        """Run a scheduled task on one reusable daemon thread."""
+        self._stop_task_timer(task_name)
+
+        stop_event = threading.Event()
+        task_thread = threading.Thread(
+            target=self._run_recurring_task,
+            args=(task_name, callback, interval_provider, stop_event, immediate),
+            name=f"minecontext-{task_name}-scheduler",
+            daemon=True,
+        )
+        self._task_stop_events[task_name] = stop_event
+        self._task_threads[task_name] = task_thread
+        task_thread.start()
+
+    def _run_recurring_task(
+        self, task_name: str, callback, interval_provider, stop_event: threading.Event, immediate
+    ):
+        if immediate:
+            self._run_scheduled_callback(task_name, callback)
+
+        while self._scheduled_tasks_enabled and self._task_enabled.get(task_name, True):
+            try:
+                interval = max(1, int(interval_provider()))
+            except Exception as e:
+                logger.error(f"Failed to calculate {task_name} scheduler interval: {e}")
+                interval = 60
+
+            if stop_event.wait(interval):
+                break
+
+            if not (self._scheduled_tasks_enabled and self._task_enabled.get(task_name, True)):
+                break
+
+            self._run_scheduled_callback(task_name, callback)
+
+    def _run_scheduled_callback(self, task_name: str, callback) -> None:
+        try:
+            callback()
+        except Exception as e:
+            logger.exception(f"Unhandled error in {task_name} scheduled task: {e}")
 
     def get_scheduled_tasks_status(self) -> Dict[str, Any]:
         return {
@@ -426,7 +478,7 @@ class ConsumptionManager:
             "pause_reasons": sorted(self._scheduler_pause_reasons),
             "daily_report_time": self._daily_report_time,
             "intervals": self._task_intervals.copy(),
-            "active_timers": list(self._task_timers.keys()),
+            "active_timers": list(self._task_threads.keys()),
         }
 
     def get_task_config(self) -> Dict[str, Any]:
@@ -533,13 +585,19 @@ class ConsumptionManager:
             self._restart_task_timer("report")
 
     def _stop_task_timer(self, task_name: str) -> None:
-        """Stop a specific task timer"""
-        if task_name in self._task_timers:
-            timer = self._task_timers[task_name]
-            if timer:
-                timer.cancel()
-            del self._task_timers[task_name]
-            logger.info(f"Stopped {task_name} timer")
+        """Stop a specific task scheduler thread."""
+        stop_event = self._task_stop_events.pop(task_name, None)
+        if stop_event:
+            stop_event.set()
+
+        task_thread = self._task_threads.pop(task_name, None)
+        if task_thread and task_thread is not threading.current_thread() and task_thread.is_alive():
+            task_thread.join(timeout=2.0)
+            if task_thread.is_alive():
+                logger.warning(f"{task_name} scheduler thread did not stop within timeout")
+
+        if stop_event or task_thread:
+            logger.info(f"Stopped {task_name} scheduler")
 
     def _restart_task_timer(self, task_name: str) -> None:
         """Restart a specific task timer"""
