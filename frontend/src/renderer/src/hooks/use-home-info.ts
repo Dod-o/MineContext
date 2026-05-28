@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import dayjs, { Dayjs } from 'dayjs'
 import { useRequest } from 'ahooks'
 import { TaskStatus } from '@renderer/constant/feed'
+import { VaultDocumentType } from '@shared/enums/global-enum'
 
 interface Vault {
   id: number
@@ -111,10 +112,10 @@ export const useHomeInfo = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const daily = await window.dbAPI.getVaultsByDocumentType('daily')
+        const daily = await window.dbAPI.getVaultsByDocumentType(VaultDocumentType.DailyReport)
         setDailySummary(daily)
 
-        const weekly = await window.dbAPI.getVaultsByDocumentType('weekly')
+        const weekly = await window.dbAPI.getVaultsByDocumentType(VaultDocumentType.WeeklyReport)
         setWeeklySummary(weekly)
 
         const tasks = await fetchTasks(dayjs())
