@@ -9,6 +9,7 @@ import type { Vault } from 'src/renderer/src/types/vault'
 import { Notification } from 'src/renderer/src/types/notification'
 import { serverPushAPI } from './server-push-api'
 import { CaptureSource } from '@interface/common/source'
+import type { ThemeMode, ThemeState } from '@shared/theme'
 
 import { VaultDocumentType } from '@shared/enums/global-enum'
 import { ScreenSettings } from '@renderer/store/setting'
@@ -41,6 +42,15 @@ const api = {
   checkForUpdate: () => ipcRenderer.invoke(IpcChannel.App_CheckForUpdate),
   quitAndInstall: () => ipcRenderer.invoke(IpcChannel.App_QuitAndInstall),
   cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload),
+  getTheme: (): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_GetTheme),
+  setTheme: (mode: ThemeMode): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_SetTheme, mode),
+  onThemeUpdated: (callback: (state: ThemeState) => void) => {
+    const wrappedCallback = (_event: Electron.IpcRendererEvent, state: ThemeState) => callback(state)
+    ipcRenderer.on(IpcChannel.ThemeUpdated, wrappedCallback)
+    return () => {
+      ipcRenderer.removeListener(IpcChannel.ThemeUpdated, wrappedCallback)
+    }
+  },
   getLaunchOnBoot: () => ipcRenderer.invoke(IpcChannel.App_GetLaunchOnBoot),
   setLaunchOnBoot: (isLaunchOnBoot: boolean) =>
     ipcRenderer.invoke(IpcChannel.App_SetLaunchOnBoot, isLaunchOnBoot)

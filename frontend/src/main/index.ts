@@ -29,6 +29,7 @@ import { ScreenMonitorTask } from './background/task/screen-monitor-task'
 import { autoUpdater } from 'electron-updater'
 import { IpcChannel } from '@shared/IpcChannel'
 import { LatestActivityTask } from './background/task/latest-activity'
+import { themeService } from './services/ThemeService'
 
 initLog()
 app.setName('MineContext')
@@ -267,6 +268,7 @@ app.whenReady().then(() => {
     }
   })
 
+  themeService.init()
   const mainWindow = createWindow()
   openInspector(mainWindow)
   powerWatcher.run()

@@ -12,6 +12,7 @@ import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from '@shared/config/constant'
 import { IpcChannel } from '@shared/IpcChannel'
 import { BrowserWindow, dialog, ipcMain, ProxyConfig, session, shell, systemPreferences } from 'electron'
 import { Notification } from 'src/renderer/src/types/notification'
+import type { ThemeMode } from '@shared/theme'
 
 import appService from './services/AppService'
 import { fileStorage as fileManager } from './services/FileStorage'
@@ -39,6 +40,7 @@ import { getTrayService } from './index'
 import { type Dayjs } from 'dayjs'
 import AppUpdater from './services/AppUpdater'
 import { HeatmapService } from './services/HeatmapService'
+import { themeService } from './services/ThemeService'
 
 const logger = getLogger('IPC')
 
@@ -107,6 +109,10 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.App_SetLaunchOnBoot, (_, isLaunchOnBoot: boolean) => {
     return appService.setAppLaunchOnBoot(isLaunchOnBoot)
   })
+
+  themeService.init()
+  ipcMain.handle(IpcChannel.App_GetTheme, () => themeService.getTheme())
+  ipcMain.handle(IpcChannel.App_SetTheme, (_, mode: ThemeMode) => themeService.setTheme(mode))
 
   //only for mac
   if (isMac) {

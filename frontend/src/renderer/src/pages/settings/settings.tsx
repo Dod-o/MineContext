@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { FC, useMemo, useEffect, useState } from 'react'
-import { Form, Button, Select, Input, Typography, Spin, Message, Switch } from '@arco-design/web-react'
+import { Form, Button, Select, Input, Typography, Spin, Message, Switch, Radio } from '@arco-design/web-react'
 import { find, get, isEmpty, pick } from 'lodash'
+import type { ThemeMode } from '@shared/theme'
 
 import ModelRadio from './components/modelRadio/model-radio'
 import { ModelTypeList, BaseUrl, embeddingModels, ModelInfoList } from './constants'
@@ -40,7 +41,7 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
     <>
       <div className="flex flex-col gap-6 mb-6">
         <div className="flex flex-col gap-[8px]">
-          <span className="text-[#0B0B0F] font-roboto text-base font-normal leading-[22px] ">
+          <span className="text-[var(--mc-text-primary)] font-roboto text-base font-normal leading-[22px] ">
             Vision language model
           </span>
           <FormItem
@@ -81,7 +82,9 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
           </FormItem>
         </div>
         <div className="flex flex-col gap-[8px]">
-          <span className="text-[#0B0B0F] font-roboto text-base font-normal leading-[22px]">Embedding model</span>
+          <span className="text-[var(--mc-text-primary)] font-roboto text-base font-normal leading-[22px]">
+            Embedding model
+          </span>
           <FormItem field={`${prefix}-embeddingModelPlatform`} className="!mb-0" requiredSymbol={false}>
             <Select
               placeholder="Select embedding provider"
@@ -170,7 +173,7 @@ const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
         label="API Key"
         field={`${prefix}-apiKey`}
         extra={
-          <div className="flex items-center text-[#6E718C] text-[14px] ">
+          <div className="flex items-center text-[var(--mc-text-secondary)] text-[14px] ">
             You can get the API Key Here:
             <Button
               onClick={() => {
@@ -231,6 +234,8 @@ const Settings: FC<SettingsProps> = (props) => {
   const [form] = Form.useForm<SettingsFormProps>()
   const [launchOnBoot, setLaunchOnBoot] = useState(false)
   const [launchOnBootLoading, setLaunchOnBootLoading] = useState(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>('system')
+  const [themeLoading, setThemeLoading] = useState(false)
   const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
   const [selectedProfileName, setSelectedProfileName] = useState<string>()
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
@@ -358,8 +363,10 @@ const Settings: FC<SettingsProps> = (props) => {
       try {
         const enabled = await window.api.getLaunchOnBoot()
         setLaunchOnBoot(Boolean(enabled))
+        const theme = await window.api.getTheme()
+        setThemeMode(theme.mode)
       } catch (error) {
-        console.error('Failed to load launch on boot setting', error)
+        console.error('Failed to load app settings', error)
       }
     })()
   })
@@ -376,6 +383,18 @@ const Settings: FC<SettingsProps> = (props) => {
     }
   })
 
+  const handleThemeModeChange = useMemoizedFn(async (mode: ThemeMode) => {
+    setThemeLoading(true)
+    try {
+      const theme = await window.api.setTheme(mode)
+      setThemeMode(theme.mode)
+    } catch (error) {
+      Message.error('Failed to update theme setting')
+    } finally {
+      setThemeLoading(false)
+    }
+  })
+
   useEffect(() => {
     const config = get(modelInfo, 'config')
     if (!getInfoLoading && !isEmpty(config) && !init) {
@@ -386,9 +405,11 @@ const Settings: FC<SettingsProps> = (props) => {
   return (
     <Spin loading={getInfoLoading} block className="[&_.arco-spin-children]:!h-full !h-full">
       <div className="top-0 left-0 flex flex-col h-full overflow-y-hidden py-2 pr-2 relative">
-        <div className="bg-white rounded-[16px] pl-6 flex flex-col h-full overflow-y-auto overflow-x-hidden scrollbar-hide pb-2">
+        <div className="bg-[var(--mc-surface)] rounded-[16px] pl-6 flex flex-col h-full overflow-y-auto overflow-x-hidden scrollbar-hide pb-2">
           <div className="mb-[12px]">
-            <div className="mt-[26px] mb-[10px] text-[24px] font-bold text-[#000]">Select a AI model to start</div>
+            <div className="mt-[26px] mb-[10px] text-[24px] font-bold text-[var(--mc-text-primary)]">
+              Select a AI model to start
+            </div>
             <Text type="secondary" className="text-[13px]">
               Configure AI model and API Key, then you can start MineContext’s intelligent context capability
             </Text>
@@ -396,19 +417,41 @@ const Settings: FC<SettingsProps> = (props) => {
 
           <div>
             {!init && (
-              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[#E5E6EB] pb-4">
+              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
                 <div>
-                  <div className="text-[14px] leading-[20px] text-[#0B0B0F]">Launch at login</div>
-                  <div className="text-[12px] leading-[18px] text-[#6E718C]">
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Launch at login</div>
+                  <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
                     Start MineContext automatically when you sign in.
                   </div>
                 </div>
                 <Switch checked={launchOnBoot} loading={launchOnBootLoading} onChange={handleLaunchOnBootChange} />
               </div>
             )}
+            {!init && (
+              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
+                <div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Appearance</div>
+                  <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                    Follow the OS theme or choose a fixed app theme.
+                  </div>
+                </div>
+                <Spin loading={themeLoading}>
+                  <Radio.Group
+                    type="button"
+                    value={themeMode}
+                    onChange={(value) => handleThemeModeChange(value as ThemeMode)}>
+                    <Radio value="system">System</Radio>
+                    <Radio value="light">Light</Radio>
+                    <Radio value="dark">Dark</Radio>
+                  </Radio.Group>
+                </Spin>
+              </div>
+            )}
             {!init && modelProfiles.length > 0 && (
-              <div className="mb-6 w-[574px] border-b border-[#E5E6EB] pb-4">
-                <div className="mb-2 text-[14px] leading-[20px] text-[#0B0B0F]">Saved model profiles</div>
+              <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
+                <div className="mb-2 text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                  Saved model profiles
+                </div>
                 <div className="flex gap-2">
                   <Select
                     placeholder="Switch to a previously saved model"
@@ -456,7 +499,11 @@ const Settings: FC<SettingsProps> = (props) => {
               </FormItem>
             </Form>
             <Spin loading={updateLoading}>
-              <Button type="primary" onClick={submit} disabled={updateLoading} className="!bg-[#000]">
+              <Button
+                type="primary"
+                onClick={submit}
+                disabled={updateLoading}
+                className="!bg-[var(--mc-primary-button-bg)] !text-[var(--mc-primary-button-text)]">
                 {init ? 'Get started' : 'Save'}
               </Button>
             </Spin>

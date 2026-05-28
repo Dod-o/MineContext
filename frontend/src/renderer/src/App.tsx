@@ -21,6 +21,7 @@ import Settings from './pages/settings/settings'
 import { ServiceProvider, useObservableTask } from './atom/event-loop.atom'
 import { getLogger } from '@shared/logger/renderer'
 import { useMemoizedFn } from 'ahooks'
+import { useAppTheme } from './hooks/use-app-theme'
 
 const logger = getLogger('App.tsx')
 const isEnglish = true // Hardcode for now, will change later
@@ -119,6 +120,8 @@ function AppContent(): React.ReactElement {
 }
 
 function App(): React.ReactElement {
+  useAppTheme()
+
   return (
     <Provider store={store}>
       <ConfigProvider locale={isEnglish ? enUS : zhCN}>
