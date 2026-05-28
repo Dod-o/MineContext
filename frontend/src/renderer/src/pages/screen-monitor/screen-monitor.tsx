@@ -169,12 +169,18 @@ const ScreenMonitor: React.FC = () => {
   const [apiConnectionMessage, setApiConnectionMessage] = useState('')
   const [audioRecording, setAudioRecording] = useState(false)
   const [audioSaving, setAudioSaving] = useState(false)
+  const [videoRecording, setVideoRecording] = useState(false)
+  const [videoSaving, setVideoSaving] = useState(false)
   const activityPollingRef = useRef<NodeJS.Timeout | null>(null)
   const statsPollingRef = useRef<NodeJS.Timeout | null>(null)
   const audioRecorderRef = useRef<MediaRecorder | null>(null)
   const audioStreamRef = useRef<MediaStream | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const audioStartedAtRef = useRef<Date | null>(null)
+  const videoRecorderRef = useRef<MediaRecorder | null>(null)
+  const videoStreamRef = useRef<MediaStream | null>(null)
+  const videoChunksRef = useRef<Blob[]>([])
+  const videoStartedAtRef = useRef<Date | null>(null)
   const settingsFormInitializedRef = useRef(false)
   const lastCheckedTimeRef = useRef<string>(
     activities.length > 0
@@ -809,6 +815,126 @@ const ScreenMonitor: React.FC = () => {
     recorder.stop()
   })
 
+  const cleanupVideoRecordingStream = useMemoizedFn(() => {
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop())
+    videoStreamRef.current = null
+    videoRecorderRef.current = null
+  })
+
+  const startVideoRecording = useMemoizedFn(async () => {
+    if (videoRecording || videoSaving) {
+      return
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === 'undefined') {
+      Message.error('Video recording is not supported in this environment.')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 2, max: 5 }
+        },
+        audio: true
+      })
+      const mimeType = getSupportedRecordingMimeType([
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm'
+      ])
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+
+      videoChunksRef.current = []
+      videoStartedAtRef.current = new Date()
+      videoStreamRef.current = stream
+      videoRecorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          videoChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = (event) => {
+        logger.error('Video recording failed', { event })
+        Message.error('Video recording failed.')
+        setVideoRecording(false)
+        setVideoSaving(false)
+        cleanupVideoRecordingStream()
+      }
+
+      recorder.onstop = async () => {
+        const endedAt = new Date()
+        const chunks = videoChunksRef.current
+        const startedAt = videoStartedAtRef.current || endedAt
+        cleanupVideoRecordingStream()
+        setVideoRecording(false)
+
+        if (!chunks.length) {
+          setVideoSaving(false)
+          Message.warning('No video data was recorded.')
+          return
+        }
+
+        const blobType = recorder.mimeType || mimeType || 'video/webm'
+        const blob = new Blob(chunks, { type: blobType })
+        const extension = getRecordingExtension(blobType, 'webm')
+        const filename = `video-recording-${dayjs(startedAt).format('YYYYMMDD-HHmmss')}.${extension}`
+
+        try {
+          await uploadMediaContextAPI({
+            mediaType: 'video',
+            file: blob,
+            filename,
+            title: 'Video recording',
+            startedAt: startedAt.toISOString(),
+            endedAt: endedAt.toISOString(),
+            summary: `Screen video recording captured from ${dayjs(startedAt).format(
+              'YYYY-MM-DD HH:mm:ss'
+            )} to ${dayjs(endedAt).format('YYYY-MM-DD HH:mm:ss')}.`
+          })
+          Message.success('Video recording saved to context')
+        } catch (error: any) {
+          Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to save video recording')
+        } finally {
+          setVideoSaving(false)
+          videoChunksRef.current = []
+          videoStartedAtRef.current = null
+        }
+      }
+
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+            setVideoSaving(true)
+            videoRecorderRef.current.stop()
+          }
+        })
+      })
+
+      recorder.start(1000)
+      setVideoRecording(true)
+      Message.success('Video recording started')
+    } catch (error: any) {
+      cleanupVideoRecordingStream()
+      setVideoRecording(false)
+      setVideoSaving(false)
+      Message.error(get(error, 'message') || 'Failed to start video recording')
+    }
+  })
+
+  const stopVideoRecording = useMemoizedFn(() => {
+    const recorder = videoRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') {
+      cleanupVideoRecordingStream()
+      setVideoRecording(false)
+      setVideoSaving(false)
+      return
+    }
+    setVideoSaving(true)
+    recorder.stop()
+  })
+
   // Tips: The biggest problem with using Form for management is that when the user does not select any screen or window, it will cause the save to fail
   const handleSave = useMemoizedFn(async () => {
     const values = form.getFieldsValue()
@@ -877,6 +1003,10 @@ const ScreenMonitor: React.FC = () => {
           audioSaving={audioSaving}
           onStartAudioRecording={startAudioRecording}
           onStopAudioRecording={stopAudioRecording}
+          videoRecording={videoRecording}
+          videoSaving={videoSaving}
+          onStartVideoRecording={startVideoRecording}
+          onStopVideoRecording={stopVideoRecording}
           onStartMonitoring={startMonitoring}
           onStopMonitoring={stopMonitoring}
           onRequestPermission={handleRequestPermission}

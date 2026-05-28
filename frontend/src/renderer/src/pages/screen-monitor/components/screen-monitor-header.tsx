@@ -1,6 +1,13 @@
 import React from 'react'
 import { Button, Space, Typography, Popover, Tag, Tooltip } from '@arco-design/web-react'
-import { IconCamera, IconPlayArrow, IconSettings, IconRecordStop, IconVoice } from '@arco-design/web-react/icon'
+import {
+  IconCamera,
+  IconPlayArrow,
+  IconSettings,
+  IconRecordStop,
+  IconVideoCamera,
+  IconVoice
+} from '@arco-design/web-react/icon'
 
 const { Title } = Typography
 
@@ -20,6 +27,10 @@ interface ScreenMonitorHeaderProps {
   audioSaving: boolean
   onStartAudioRecording: () => void
   onStopAudioRecording: () => void
+  videoRecording: boolean
+  videoSaving: boolean
+  onStartVideoRecording: () => void
+  onStopVideoRecording: () => void
   onStartMonitoring: () => void
   onStopMonitoring: () => void
   onRequestPermission: () => void
@@ -41,6 +52,10 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
   audioSaving,
   onStartAudioRecording,
   onStopAudioRecording,
+  videoRecording,
+  videoSaving,
+  onStartVideoRecording,
+  onStopVideoRecording,
   onStartMonitoring,
   onStopMonitoring
 }) => {
@@ -123,6 +138,23 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
                     : '[&_.arco-btn]: !bg-white [&_.arco-btn]: !border-gray-300 [&_.arco-btn]: !text-black [&_.arco-btn:hover]: !bg-gray-50'
                 }>
                 {audioRecording ? 'Stop Audio' : 'Record Audio'}
+              </Button>
+            </Tooltip>
+            <Tooltip content={videoRecording ? 'Stop screen video recording and save it as context.' : 'Record a screen video for later context review.'}>
+              <Button
+                type={videoRecording ? 'primary' : 'outline'}
+                status={videoRecording ? 'danger' : undefined}
+                icon={videoRecording ? <IconRecordStop /> : <IconVideoCamera />}
+                size="large"
+                loading={videoSaving}
+                disabled={!isToday || videoSaving}
+                onClick={videoRecording ? onStopVideoRecording : onStartVideoRecording}
+                className={
+                  videoRecording
+                    ? '[&_.arco-btn-primary]: !bg-red-500 [&_.arco-btn-primary:hover]: !bg-red-600'
+                    : '[&_.arco-btn]: !bg-white [&_.arco-btn]: !border-gray-300 [&_.arco-btn]: !text-black [&_.arco-btn:hover]: !bg-gray-50'
+                }>
+                {videoRecording ? 'Stop Video' : 'Record Video'}
               </Button>
             </Tooltip>
             {!isMonitoring ? (
