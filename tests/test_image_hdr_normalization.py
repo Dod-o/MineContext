@@ -34,6 +34,7 @@ class HdrScreenshotNormalizationTest(unittest.TestCase):
 
             self.assertTrue(changed)
             self.assertLess(after, before - 40)
+            self.assertLess(after, 170)
 
     def test_normal_contrast_image_is_left_unchanged(self):
         with tempfile.TemporaryDirectory() as temp_dir:
