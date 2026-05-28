@@ -7,6 +7,7 @@
 Content generation routes (smart tips, todos, activities, reports)
 """
 
+import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -75,6 +76,13 @@ class SchedulerStateRequest(BaseModel):
     """Scheduled content generation pause/resume request"""
 
     reason: str = Field(default="external", min_length=1, max_length=64)
+
+
+class WorkdayClockRequest(BaseModel):
+    """Clock-in/out request for workday review workflows."""
+
+    start_time: Optional[int] = Field(None, description="Optional workday start timestamp")
+    end_time: Optional[int] = Field(None, description="Optional workday end timestamp")
 
 
 @router.get("/api/content_generation/config")
@@ -190,3 +198,68 @@ async def resume_content_generation_scheduler(
     except Exception as e:
         logger.exception(f"Error resuming content generation scheduler: {e}")
         return convert_resp(code=500, status=500, message=f"Failed to resume scheduler: {str(e)}")
+
+
+def _default_workday_range() -> tuple[int, int]:
+    now = datetime.datetime.now()
+    start = datetime.datetime.combine(now.date(), datetime.time.min)
+    return int(start.timestamp()), int(now.timestamp())
+
+
+@router.post("/api/content_generation/workday/clock_in")
+async def clock_in_workday(
+    request: WorkdayClockRequest,
+    opencontext: OpenContext = Depends(get_context_lab),
+    _auth: str = auth_dependency,
+):
+    """Resume scheduled generation when the user starts work."""
+    try:
+        if not hasattr(opencontext, "consumption_manager") or not opencontext.consumption_manager:
+            return convert_resp(code=500, status=500, message="Consumption manager not initialized")
+
+        status = opencontext.consumption_manager.resume_scheduled_tasks("workday-clock-out")
+        return convert_resp(data=status, message="Clocked in")
+    except Exception as e:
+        logger.exception(f"Error clocking in: {e}")
+        return convert_resp(code=500, status=500, message=f"Failed to clock in: {str(e)}")
+
+
+@router.post("/api/content_generation/workday/clock_out")
+async def clock_out_workday(
+    request: WorkdayClockRequest,
+    opencontext: OpenContext = Depends(get_context_lab),
+    _auth: str = auth_dependency,
+):
+    """Pause scheduled generation and create a same-day review/todo snapshot."""
+    try:
+        if not hasattr(opencontext, "consumption_manager") or not opencontext.consumption_manager:
+            return convert_resp(code=500, status=500, message="Consumption manager not initialized")
+
+        start_time, end_time = _default_workday_range()
+        if request.start_time is not None:
+            start_time = request.start_time
+        if request.end_time is not None:
+            end_time = request.end_time
+        if end_time <= start_time:
+            return convert_resp(code=400, status=400, message="end_time must be greater than start_time")
+
+        manager = opencontext.consumption_manager
+        scheduler_status = manager.pause_scheduled_tasks("workday-clock-out")
+        result = {"scheduler": scheduler_status, "todo_batch_id": None, "report_generated": False}
+
+        todo_manager = getattr(manager, "_smart_todo_manager", None)
+        if todo_manager:
+            result["todo_batch_id"] = todo_manager.generate_todo_tasks(
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        report_generator = getattr(manager, "_activity_generator", None)
+        if report_generator:
+            report = await report_generator.generate_report(start_time, end_time)
+            result["report_generated"] = bool(report)
+
+        return convert_resp(data=result, message="Clocked out and generated workday review")
+    except Exception as e:
+        logger.exception(f"Error clocking out: {e}")
+        return convert_resp(code=500, status=500, message=f"Failed to clock out: {str(e)}")
