@@ -10,6 +10,27 @@ import path from 'path'
 
 const logger = getLogger('AppService')
 
+function quoteDesktopExecPath(executablePath: string): string {
+  const escapedPath = executablePath.replace(/(["\\`$])/g, '\\$1')
+  return /\s/.test(executablePath) ? `"${escapedPath}"` : escapedPath
+}
+
+function createLinuxAutostartDesktopEntry(executablePath: string): string {
+  return [
+    '[Desktop Entry]',
+    'Type=Application',
+    'Name=MineContext',
+    'Comment=A powerful AI assistant for producer.',
+    `Exec=${quoteDesktopExecPath(executablePath)}`,
+    'Icon=minecontext',
+    'Terminal=false',
+    'StartupNotify=false',
+    'Categories=Development;Utility;',
+    'X-GNOME-Autostart-enabled=true',
+    'Hidden=false'
+  ].join('\n')
+}
+
 export class AppService {
   private static instance: AppService
 
@@ -71,18 +92,7 @@ export class AppService {
             executablePath = process.env.APPIMAGE
           }
 
-          // Create desktop file content
-          const desktopContent = `[Desktop Entry]
-  Type=Application
-  Name=MineContext
-  Comment=A powerful AI assistant for producer.
-  Exec=${executablePath}
-  Icon=minecontext
-  Terminal=false
-  StartupNotify=false
-  Categories=Development;Utility;
-  X-GNOME-Autostart-enabled=true
-  Hidden=false`
+          const desktopContent = createLinuxAutostartDesktopEntry(executablePath)
 
           // Write desktop file
           await fs.promises.writeFile(desktopFile, desktopContent)
