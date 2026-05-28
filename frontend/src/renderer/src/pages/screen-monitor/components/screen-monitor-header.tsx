@@ -36,6 +36,8 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
   onStartMonitoring,
   onStopMonitoring
 }) => {
+  const description =
+    'Screen Monitor captures anything on your screen and transforms it into intelligent, connected Contexts. All data stays local with full privacy protection'
   const apiStatusConfig = {
     unknown: { color: 'gray', label: 'API unknown' },
     checking: { color: 'blue', label: 'API checking' },
@@ -54,9 +56,14 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
         <Text
           type="secondary"
           className="!text-[13px]"
-          style={{ display: 'block', lineHeight: '20px', wordBreak: 'normal', overflowWrap: 'normal' }}>
-          Screen Monitor captures anything on your screen and transforms it into intelligent, connected Contexts. All
-          data stays local with full privacy protection ✨
+          style={{
+            display: 'block',
+            lineHeight: '20px',
+            wordBreak: 'keep-all',
+            overflowWrap: 'normal',
+            hyphens: 'none'
+          }}>
+          {description}
         </Text>
       </div>
       <div className="flex items-center ml-0 md:ml-6 mt-4 md:mt-0 justify-end">
