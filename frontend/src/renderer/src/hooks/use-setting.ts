@@ -21,6 +21,7 @@ export const useSetting = () => {
     recordingHours,
     enableRecordingHours,
     applyToDays,
+    excludedAppPatterns,
     manualCaptureShortcutEnabled,
     manualCaptureShortcut,
     adaptiveCapture
@@ -61,6 +62,13 @@ export const useSetting = () => {
     [dispatch]
   )
 
+  const setExcludedAppPatterns = useCallback(
+    (patterns: string[]) => {
+      dispatch(setScreenSettingsAction({ excludedAppPatterns: patterns }))
+    },
+    [dispatch]
+  )
+
   const setManualCaptureShortcut = useCallback(
     (shortcut: string) => {
       dispatch(setScreenSettingsAction({ manualCaptureShortcut: shortcut }))
@@ -80,6 +88,7 @@ export const useSetting = () => {
     recordingHours,
     enableRecordingHours,
     applyToDays,
+    excludedAppPatterns,
     manualCaptureShortcutEnabled,
     manualCaptureShortcut,
     adaptiveCapture,
@@ -87,6 +96,7 @@ export const useSetting = () => {
     setEnableRecordingHours,
     setRecordingHours,
     setApplyToDays,
+    setExcludedAppPatterns,
     setManualCaptureShortcutEnabled,
     setManualCaptureShortcut,
     setAdaptiveCapture

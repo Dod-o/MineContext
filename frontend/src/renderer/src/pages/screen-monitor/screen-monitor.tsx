@@ -52,6 +52,7 @@ const ScreenMonitor: React.FC = () => {
     recordingHours,
     enableRecordingHours,
     applyToDays,
+    excludedAppPatterns,
     manualCaptureShortcutEnabled,
     manualCaptureShortcut,
     adaptiveCapture,
@@ -59,6 +60,7 @@ const ScreenMonitor: React.FC = () => {
     setEnableRecordingHours,
     setRecordingHours,
     setApplyToDays,
+    setExcludedAppPatterns,
     setManualCaptureShortcutEnabled,
     setManualCaptureShortcut,
     setAdaptiveCapture
@@ -116,6 +118,7 @@ const ScreenMonitor: React.FC = () => {
     manualCaptureShortcutEnabled
   )
   const [tempManualCaptureShortcut, setTempManualCaptureShortcut] = useState(manualCaptureShortcut)
+  const [tempExcludedAppPatterns, setTempExcludedAppPatterns] = useState(excludedAppPatterns)
   const [tempAdaptiveCapture, setTempAdaptiveCapture] = useState(adaptiveCapture)
 
   // Refresh the application list and trigger a re-render
@@ -223,6 +226,7 @@ const ScreenMonitor: React.FC = () => {
       applyToDays,
       manualCaptureShortcutEnabled,
       manualCaptureShortcut,
+      excludedAppPatterns,
       adaptiveCapture
     })
     await window.screenMonitorAPI.startTask()
@@ -433,6 +437,7 @@ const ScreenMonitor: React.FC = () => {
     setTempApplyToDays(applyToDays)
     setTempManualCaptureShortcutEnabled(manualCaptureShortcutEnabled)
     setTempManualCaptureShortcut(manualCaptureShortcut)
+    setTempExcludedAppPatterns(excludedAppPatterns)
     setTempAdaptiveCapture(adaptiveCapture)
     setSettingsVisible(false)
     setApplicationVisible(false)
@@ -445,6 +450,7 @@ const ScreenMonitor: React.FC = () => {
     setApplyToDays(tempApplyToDays)
     setManualCaptureShortcutEnabled(tempManualCaptureShortcutEnabled)
     setManualCaptureShortcut(tempManualCaptureShortcut)
+    setExcludedAppPatterns(tempExcludedAppPatterns)
     setAdaptiveCapture(tempAdaptiveCapture)
     setSettingsVisible(false)
   })
@@ -573,6 +579,7 @@ const ScreenMonitor: React.FC = () => {
       setTempApplyToDays(applyToDays)
       setTempManualCaptureShortcutEnabled(manualCaptureShortcutEnabled)
       setTempManualCaptureShortcut(manualCaptureShortcut)
+      setTempExcludedAppPatterns(excludedAppPatterns)
       setTempAdaptiveCapture(adaptiveCapture)
     }
   }, [settingSources, sources])
@@ -657,6 +664,7 @@ const ScreenMonitor: React.FC = () => {
           tempApplyToDays={tempApplyToDays}
           tempManualCaptureShortcutEnabled={tempManualCaptureShortcutEnabled}
           tempManualCaptureShortcut={tempManualCaptureShortcut}
+          tempExcludedAppPatterns={tempExcludedAppPatterns}
           tempAdaptiveCapture={tempAdaptiveCapture}
           onCancel={handleCancelSettings}
           onSave={handleSave}
@@ -667,6 +675,7 @@ const ScreenMonitor: React.FC = () => {
           onSetTempApplyToDays={setTempApplyToDays}
           onSetTempManualCaptureShortcutEnabled={setTempManualCaptureShortcutEnabled}
           onSetTempManualCaptureShortcut={setTempManualCaptureShortcut}
+          onSetTempExcludedAppPatterns={setTempExcludedAppPatterns}
           onSetTempAdaptiveCapture={setTempAdaptiveCapture}
         />
       </div>

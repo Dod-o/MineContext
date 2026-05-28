@@ -22,6 +22,7 @@ interface SettingsModalProps {
   tempApplyToDays: string
   tempManualCaptureShortcutEnabled: boolean
   tempManualCaptureShortcut: string
+  tempExcludedAppPatterns: string[]
   tempAdaptiveCapture: AdaptiveCaptureSettings
   onCancel: () => void
   onSave: () => void
@@ -32,6 +33,7 @@ interface SettingsModalProps {
   onSetTempApplyToDays: (value: ApplyToDays) => void
   onSetTempManualCaptureShortcutEnabled: (value: boolean) => void
   onSetTempManualCaptureShortcut: (value: string) => void
+  onSetTempExcludedAppPatterns: (value: string[]) => void
   onSetTempAdaptiveCapture: (value: AdaptiveCaptureSettings) => void
 }
 
@@ -68,6 +70,13 @@ const AdaptiveRuleControl: React.FC<AdaptiveRuleControlProps> = ({ label, descri
   )
 }
 
+function parseExcludedAppPatterns(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+}
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
   form,
@@ -81,6 +90,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   tempApplyToDays,
   tempManualCaptureShortcutEnabled,
   tempManualCaptureShortcut,
+  tempExcludedAppPatterns,
   tempAdaptiveCapture,
   onCancel,
   onSave,
@@ -91,6 +101,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetTempApplyToDays,
   onSetTempManualCaptureShortcutEnabled,
   onSetTempManualCaptureShortcut,
+  onSetTempExcludedAppPatterns,
   onSetTempAdaptiveCapture
 }) => {
   const updateAdaptiveRule = (
@@ -187,6 +198,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
               )}
+            </Form.Item>
+            <Form.Item label="Excluded applications" className="[&_.arco-form-item-label]:!text-xs">
+              <Input.TextArea
+                value={tempExcludedAppPatterns.join('\n')}
+                onChange={(value) => onSetTempExcludedAppPatterns(parseExcludedAppPatterns(value))}
+                placeholder="Window names to skip, one per line"
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
+              <div className="mt-1 text-[11px] leading-[16px] text-[var(--mc-text-secondary,#6e718c)]">
+                Matching window captures are skipped before upload.
+              </div>
             </Form.Item>
             <Form.Item label="Choose what to record" shouldUpdate>
               {(values) => {

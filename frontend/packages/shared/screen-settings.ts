@@ -20,6 +20,7 @@ export interface ScreenSettings {
   enableRecordingHours: boolean
   recordingHours: [string, string]
   applyToDays: ApplyToDays
+  excludedAppPatterns: string[]
   manualCaptureShortcutEnabled: boolean
   manualCaptureShortcut: string
   adaptiveCapture: AdaptiveCaptureSettings
@@ -57,6 +58,7 @@ export const defaultScreenSettings: ScreenSettings = {
   enableRecordingHours: false,
   recordingHours: ['08:00:00', '20:00:00'],
   applyToDays: 'weekday',
+  excludedAppPatterns: [],
   manualCaptureShortcutEnabled: true,
   manualCaptureShortcut: 'CommandOrControl+Shift+S',
   adaptiveCapture: defaultAdaptiveCaptureSettings
@@ -87,6 +89,11 @@ export function normalizeScreenSettings(settings?: PartialScreenSettings): Scree
   return {
     ...defaultScreenSettings,
     ...(settings || {}),
+    excludedAppPatterns: Array.isArray(settings?.excludedAppPatterns)
+      ? settings.excludedAppPatterns
+          .map((pattern) => (typeof pattern === 'string' ? pattern.trim() : ''))
+          .filter(Boolean)
+      : defaultScreenSettings.excludedAppPatterns,
     adaptiveCapture: normalizeAdaptiveCaptureSettings(settings?.adaptiveCapture)
   }
 }

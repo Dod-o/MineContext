@@ -224,6 +224,42 @@ class ScreenMonitorTask extends ScheduleNextTask {
     return normalizeScreenSettings(this.modelConfig)
   }
 
+  private getExcludedAppPatterns(): string[] {
+    return this.getEffectiveSettings().excludedAppPatterns.map((pattern) => pattern.toLowerCase())
+  }
+
+  private isSourceExcluded(source: CaptureSource): boolean {
+    if (source.type !== 'window') {
+      return false
+    }
+
+    const patterns = this.getExcludedAppPatterns()
+    if (patterns.length === 0) {
+      return false
+    }
+
+    const sourceText = [
+      source.name,
+      get(source, 'appName'),
+      get(source, 'sourceName'),
+      get(source, 'title')
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return patterns.some((pattern) => sourceText.includes(pattern))
+  }
+
+  private filterExcludedSources(sources: CaptureSource[]): CaptureSource[] {
+    const filteredSources = sources.filter((source) => !this.isSourceExcluded(source))
+    const excludedCount = sources.length - filteredSources.length
+    if (excludedCount > 0) {
+      logger.debug(`Skipped ${excludedCount} source(s) by excluded application settings`)
+    }
+    return filteredSources
+  }
+
   private registerManualCaptureShortcut() {
     this.unregisterManualCaptureShortcut()
 
@@ -310,6 +346,9 @@ class ScreenMonitorTask extends ScheduleNextTask {
     const hasSelection = selectedIds.size > 0 || selectedNames.size > 0
     const candidates = visibleSources.filter((source) => {
       if (!source.isVisible) {
+        return false
+      }
+      if (this.isSourceExcluded(source)) {
         return false
       }
       if (!hasSelection) {
@@ -419,7 +458,8 @@ class ScreenMonitorTask extends ScheduleNextTask {
         'visibleSources',
         visibleSources?.map((item) => pick(item, ['name', 'type', 'isVisible']))
       )
-      const ids = visibleSources?.map((item) => (item.isVisible ? item.id : '')).filter(Boolean) || []
+      const capturableVisibleSources = this.filterExcludedSources(visibleSources || [])
+      const ids = capturableVisibleSources?.map((item) => (item.isVisible ? item.id : '')).filter(Boolean) || []
       if (!visibleSources || ids.length === 0) {
         logger.warn('screen monitor visibleSources is empty')
         return
@@ -429,7 +469,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
         return
       }
 
-      const sources = this.resolveSourcesForCapture(visibleSources)
+      const sources = this.resolveSourcesForCapture(capturableVisibleSources)
       if (sources.length === 0) {
         logger.warn('screen monitor selected sources are not currently capturable')
         return
@@ -458,8 +498,12 @@ class ScreenMonitorTask extends ScheduleNextTask {
         visibleSources = await this.getVisibleSourcesUseCache()
       }
 
-      const configuredSources = this.resolveSourcesForCapture(visibleSources)
-      const fallbackSources = visibleSources.filter((source) => source.isVisible && source.type === 'screen').slice(0, 1)
+      const capturableVisibleSources = this.filterExcludedSources(visibleSources || [])
+      const configuredSources = this.resolveSourcesForCapture(capturableVisibleSources)
+      const fallbackSources =
+        this.appInfo.length === 0
+          ? capturableVisibleSources.filter((source) => source.isVisible && source.type === 'screen').slice(0, 1)
+          : []
       const sources = configuredSources.length > 0 ? configuredSources : fallbackSources
       if (sources.length === 0) {
         return { success: false, capturedCount: 0, failedCount: 0, error: 'No capturable screen or window found' }
