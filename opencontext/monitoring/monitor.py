@@ -529,12 +529,15 @@ class Monitor:
 
     def record_processing_error(
         self,
-        error_message: str,
+        error_message: str = None,
         processor_name: str = "",
         context_count: int = 0,
         timestamp: datetime = None,
+        **kwargs,
     ):
         """Record processing error"""
+        if error_message is None:
+            error_message = kwargs.get("error_msg") or "Unknown processing error"
         if timestamp is None:
             timestamp = datetime.now()
         with self._lock:
@@ -769,10 +772,20 @@ def record_retrieval_metrics(
 
 
 def record_processing_error(
-    error_message: str, processor_name: str = "", context_count: int = 0, timestamp: datetime = None
+    error_message: str = None,
+    processor_name: str = "",
+    context_count: int = 0,
+    timestamp: datetime = None,
+    **kwargs,
 ):
     """Global function: Record processing error"""
-    get_monitor().record_processing_error(error_message, processor_name, context_count, timestamp)
+    get_monitor().record_processing_error(
+        error_message,
+        processor_name=processor_name,
+        context_count=context_count,
+        timestamp=timestamp,
+        **kwargs,
+    )
 
 
 def record_processing_stage(
