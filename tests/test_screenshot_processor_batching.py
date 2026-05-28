@@ -175,6 +175,38 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
             if os.path.exists(tmp_file.name):
                 os.unlink(tmp_file.name)
 
+    def test_batch_process_records_empty_vlm_outputs_as_failures(self):
+        processor = self._build_processor()
+        raw_contexts = [self._raw_context(1), self._raw_context(2)]
+        recorded_stats = []
+        recorded_errors = []
+
+        async def fake_process_vlm_single(_raw_context):
+            return []
+
+        original_increment = screenshot_processor_module.increment_recording_stat
+        original_record_error = screenshot_processor_module.record_processing_error
+        try:
+            processor._process_vlm_single = fake_process_vlm_single
+            screenshot_processor_module.increment_recording_stat = (
+                lambda stat_type, count=1: recorded_stats.append((stat_type, count))
+            )
+            screenshot_processor_module.record_processing_error = (
+                lambda error_msg, processor_name, context_count=1: recorded_errors.append(
+                    (error_msg, processor_name, context_count)
+                )
+            )
+
+            result = asyncio.run(processor.batch_process(raw_contexts))
+        finally:
+            screenshot_processor_module.increment_recording_stat = original_increment
+            screenshot_processor_module.record_processing_error = original_record_error
+
+        self.assertEqual(result, [])
+        self.assertEqual(recorded_stats, [("failed", 2)])
+        self.assertEqual(recorded_errors[0][1:], ("screenshot_processor", 2))
+        self.assertIn("No contexts extracted", recorded_errors[0][0])
+
     def test_vlm_response_accepts_root_list_and_skips_invalid_items(self):
         processor = self._build_processor()
 

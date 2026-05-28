@@ -364,6 +364,18 @@ class ScreenshotProcessor(BaseContextProcessor):
                     processed_image_paths = self._strip_processed_image_paths(processed_contexts)
                     get_storage().batch_upsert_processed_context(processed_contexts)
                     self._delete_processed_image_files(processed_image_paths)
+                else:
+                    consecutive_failures += 1
+                    backoff_seconds = min(60, 2 ** min(consecutive_failures, 5))
+                    logger.warning(
+                        "Screenshot batch produced no visible contexts; "
+                        f"backing off for {backoff_seconds}s after "
+                        f"{consecutive_failures} consecutive empty batch(es)"
+                    )
+                    unprocessed_contexts.clear()
+                    batch_started_at = None
+                    self._stop_event.wait(backoff_seconds)
+                    continue
             except Exception as e:
                 error_msg = f"Failed during concurrent VLM processing: {e}"
                 logger.error(error_msg)
@@ -722,11 +734,13 @@ class ScreenshotProcessor(BaseContextProcessor):
         )
 
         all_vlm_items = []
+        failed_count = 0
         for idx, result in enumerate(vlm_results):
             if isinstance(result, Exception):
                 logger.error(f"Screenshot {idx} failed with error: {result}")
                 increment_recording_stat("failed", 1)
                 record_processing_error(str(result), processor_name=self.get_name(), context_count=1)
+                failed_count += 1
                 continue
             if result:
                 # for item in result:
@@ -735,6 +749,17 @@ class ScreenshotProcessor(BaseContextProcessor):
                 all_vlm_items.extend(result)
 
         if not all_vlm_items:
+            empty_count = max(0, len(raw_contexts) - failed_count)
+            if empty_count:
+                error_msg = (
+                    f"No contexts extracted from {empty_count} screenshot(s); "
+                    "recording will slow down to avoid silent token consumption"
+                )
+                logger.warning(error_msg)
+                increment_recording_stat("failed", empty_count)
+                record_processing_error(
+                    error_msg, processor_name=self.get_name(), context_count=empty_count
+                )
             return []
 
         logger.info(f"VLM parsing completed, got {len(all_vlm_items)} items")
