@@ -25,6 +25,7 @@ import {
   getGeneralSettingsAPI,
   getModelInfo,
   getModelProfilesAPI,
+  getPromptModelAssignmentsAPI,
   getPromptLanguageAPI,
   getPromptsAPI,
   ModelConfigProps,
@@ -34,6 +35,7 @@ import {
   TodoApprovalMode,
   updateGeneralSettingsAPI,
   updateFeatureModelAssignmentsAPI,
+  updatePromptModelAssignmentsAPI,
   updatePromptLanguageAPI,
   updatePromptsAPI,
   updateModelSettingsAPI
@@ -278,6 +280,11 @@ const PROMPT_CATEGORY_OPTIONS: PromptCategoryOption[] = [
     description: 'Control report scope, summarization granularity, and future-task handling.'
   },
   {
+    label: 'Daily report merge',
+    value: 'generation.merge_hourly_reports',
+    description: 'Control how hourly summaries are combined into the final daily report.'
+  },
+  {
     label: 'Activity monitor',
     value: 'generation.realtime_activity_monitor',
     description: 'Control real-time activity title and summary style.'
@@ -475,6 +482,7 @@ const Settings: FC<SettingsProps> = (props) => {
   const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
   const [selectedProfileName, setSelectedProfileName] = useState<string>()
   const [prompts, setPrompts] = useState<PromptsConfigProps>({})
+  const [promptModelAssignments, setPromptModelAssignments] = useState<Record<string, string>>({})
   const [promptLoading, setPromptLoading] = useState(false)
   const [promptSaving, setPromptSaving] = useState(false)
   const [selectedPromptPath, setSelectedPromptPath] = useState(PROMPT_CATEGORY_OPTIONS[0].value)
@@ -630,11 +638,24 @@ const Settings: FC<SettingsProps> = (props) => {
     })
   })
 
+  const updatePromptModelAssignment = useMemoizedFn((promptPath: string, profileName: string) => {
+    setPromptModelAssignments((assignments) => {
+      const nextAssignments = { ...assignments }
+      if (profileName) {
+        nextAssignments[promptPath] = profileName
+      } else {
+        delete nextAssignments[promptPath]
+      }
+      return nextAssignments
+    })
+  })
+
   const loadPrompts = useMemoizedFn(async () => {
     setPromptLoading(true)
     try {
-      const loadedPrompts = stripNonPromptTopLevelKeys(await getPromptsAPI())
-      setPrompts(loadedPrompts)
+      const [loadedPrompts, assignments] = await Promise.all([getPromptsAPI(), getPromptModelAssignmentsAPI()])
+      setPrompts(stripNonPromptTopLevelKeys(loadedPrompts))
+      setPromptModelAssignments(assignments.prompts || {})
     } catch (error: any) {
       Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to load system prompts')
     } finally {
@@ -646,8 +667,14 @@ const Settings: FC<SettingsProps> = (props) => {
     setPromptSaving(true)
     try {
       const nextPrompts = setPromptPair(prompts, selectedPromptPath, promptDraft)
+      const validProfileNames = new Set(modelProfiles.map((profile) => profile.name))
+      const nextPromptAssignments = Object.fromEntries(
+        Object.entries(promptModelAssignments).filter(([, profileName]) => validProfileNames.has(profileName))
+      )
       await updatePromptsAPI(nextPrompts)
+      await updatePromptModelAssignmentsAPI({ prompts: nextPromptAssignments })
       setPrompts(nextPrompts)
+      setPromptModelAssignments(nextPromptAssignments)
       Message.success('System prompt saved')
     } catch (error: any) {
       Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to save system prompt')
@@ -1346,6 +1373,15 @@ const Settings: FC<SettingsProps> = (props) => {
                     />
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
                       {selectedPromptCategory.description}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                      <Select
+                        value={promptModelAssignments[selectedPromptPath] || ''}
+                        options={modelProfileOptions}
+                        onChange={(value) => updatePromptModelAssignment(selectedPromptPath, value as string)}
+                        className="!w-[360px]"
+                      />
                     </div>
                   </div>
                   <div className="mb-3">

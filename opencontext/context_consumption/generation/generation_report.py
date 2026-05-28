@@ -16,7 +16,7 @@ from opencontext.config.global_config import get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
 from opencontext.llm.global_vlm_client import (
     generate_with_messages_async,
-    get_feature_model_profile,
+    get_prompt_model_profile,
 )
 from opencontext.models.enums import ContextType
 from opencontext.storage.global_storage import get_storage
@@ -211,7 +211,10 @@ class ReportGenerator:
         ]
         summary = await generate_with_messages_async(
             messages,
-            model_profile=get_feature_model_profile("content_generation.report"),
+            model_profile=get_prompt_model_profile(
+                "generation.generation_report",
+                "content_generation.report",
+            ),
         )
 
         if summary:
@@ -259,7 +262,10 @@ class ReportGenerator:
         # Generate report with LLM
         report = await generate_with_messages_async(
             messages,
-            model_profile=get_feature_model_profile("content_generation.report"),
+            model_profile=get_prompt_model_profile(
+                "generation.merge_hourly_reports",
+                "content_generation.report",
+            ),
         )
 
         if not report:

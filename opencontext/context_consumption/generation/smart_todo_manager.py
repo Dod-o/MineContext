@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 from opencontext.config.global_config import get_config, get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
-from opencontext.llm.global_vlm_client import generate_with_messages, get_feature_model_profile
+from opencontext.llm.global_vlm_client import generate_with_messages, get_prompt_model_profile
 from opencontext.models.context import ContextType, Vectorize
 from opencontext.storage.global_storage import get_storage
 from opencontext.utils.json_parser import parse_json_from_response
@@ -306,7 +306,10 @@ class SmartTodoManager:
             # Call the large model to extract tasks, enabling tools to get relevant background information
             task_response = generate_with_messages(
                 messages,
-                model_profile=get_feature_model_profile("content_generation.todos"),
+                model_profile=get_prompt_model_profile(
+                    "generation.todo_extraction",
+                    "content_generation.todos",
+                ),
             )
 
             # Save debug information

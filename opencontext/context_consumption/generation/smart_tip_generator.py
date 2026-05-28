@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 from opencontext.config.global_config import get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
-from opencontext.llm.global_vlm_client import generate_with_messages, get_feature_model_profile
+from opencontext.llm.global_vlm_client import generate_with_messages, get_prompt_model_profile
 from opencontext.models.context import ProcessedContext
 from opencontext.models.enums import ContextType
 from opencontext.storage.base_storage import DocumentData
@@ -284,7 +284,10 @@ class SmartTipGenerator:
             messages,
             max_calls=2,
             tools=ALL_TOOL_DEFINITIONS,
-            model_profile=get_feature_model_profile("content_generation.tips"),
+            model_profile=get_prompt_model_profile(
+                "generation.smart_tip_generation",
+                "content_generation.tips",
+            ),
         )
 
         # Save debug information

@@ -80,11 +80,11 @@ class FeatureModelAssignmentsTest(unittest.TestCase):
     def test_generation_tasks_pass_feature_model_profiles(self):
         content = "\n".join(path.read_text(encoding="utf-8") for path in GENERATION_FILES)
 
-        self.assertIn('get_feature_model_profile("content_generation.activity")', content)
-        self.assertIn('get_feature_model_profile("content_generation.tips")', content)
-        self.assertIn('get_feature_model_profile("content_generation.todos")', content)
-        self.assertIn('get_feature_model_profile("content_generation.report")', content)
-        self.assertIn("model_profile=get_feature_model_profile", content)
+        self.assertIn('"content_generation.activity"', content)
+        self.assertIn('"content_generation.tips"', content)
+        self.assertIn('"content_generation.todos"', content)
+        self.assertIn('"content_generation.report"', content)
+        self.assertIn("model_profile=get_prompt_model_profile", content)
 
     def test_frontend_exposes_feature_assignment_controls(self):
         service = SETTINGS_SERVICE.read_text(encoding="utf-8")

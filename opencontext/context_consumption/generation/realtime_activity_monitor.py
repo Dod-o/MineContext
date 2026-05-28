@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set, TypedDict
 
 from opencontext.config.global_config import get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
-from opencontext.llm.global_vlm_client import generate_with_messages, get_feature_model_profile
+from opencontext.llm.global_vlm_client import generate_with_messages, get_prompt_model_profile
 from opencontext.models.context import ProcessedContext
 from opencontext.models.enums import ContentFormat, ContextType
 from opencontext.storage.global_storage import get_storage
@@ -187,7 +187,10 @@ class RealtimeActivityMonitor:
             ]
             response = generate_with_messages(
                 messages,
-                model_profile=get_feature_model_profile("content_generation.activity"),
+                model_profile=get_prompt_model_profile(
+                    "generation.realtime_activity_monitor",
+                    "content_generation.activity",
+                ),
             )
             # print(f"user len prompt: {len(user_prompt)} response: {response}")
 

@@ -542,3 +542,25 @@ def get_feature_model_profile(feature_key: Optional[str]) -> Optional[str]:
         if isinstance(profile_name, str) and profile_name.strip():
             return profile_name.strip()
     return None
+
+
+def get_prompt_model_profile(
+    prompt_key: Optional[str], feature_key: Optional[str] = None
+) -> Optional[str]:
+    """Return the configured model profile for a prompt, falling back to its feature."""
+    if prompt_key:
+        assignments = get_config(MODEL_ASSIGNMENTS_CONFIG_KEY) or {}
+        if isinstance(assignments, dict):
+            prompt_assignments = assignments.get("prompts", {})
+            if isinstance(prompt_assignments, dict):
+                candidates = [prompt_key]
+                short_key = prompt_key.rsplit(".", 1)[-1]
+                if short_key != prompt_key:
+                    candidates.append(short_key)
+
+                for candidate in candidates:
+                    profile_name = prompt_assignments.get(candidate)
+                    if isinstance(profile_name, str) and profile_name.strip():
+                        return profile_name.strip()
+
+    return get_feature_model_profile(feature_key)

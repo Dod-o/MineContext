@@ -31,6 +31,10 @@ export interface FeatureModelAssignmentsProps {
   features: Record<string, string>
 }
 
+export interface PromptModelAssignmentsProps {
+  prompts: Record<string, string>
+}
+
 export type PromptsConfigProps = Record<string, unknown>
 export type PromptLanguage = 'en' | 'zh'
 export type TodoApprovalMode = 'review' | 'auto_add'
@@ -94,6 +98,17 @@ export const updateFeatureModelAssignmentsAPI = async (
   assignments: FeatureModelAssignmentsProps
 ): Promise<void> => {
   await axiosInstance.post('/api/model_settings/feature_assignments', { assignments })
+}
+
+export const getPromptModelAssignmentsAPI = async (): Promise<PromptModelAssignmentsProps> => {
+  const res = await axiosInstance.get('/api/model_settings/prompt_assignments')
+  return get(res, 'data.data.assignments') || { prompts: {} }
+}
+
+export const updatePromptModelAssignmentsAPI = async (
+  assignments: PromptModelAssignmentsProps
+): Promise<void> => {
+  await axiosInstance.post('/api/model_settings/prompt_assignments', { assignments })
 }
 
 // Update model settings information
