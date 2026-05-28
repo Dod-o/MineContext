@@ -1,7 +1,7 @@
 Welcome to MineContext!
 
 MineContext is your Context-Aware AI Partner
-Not a workbench, not a second brain, nor a knowledge base—but a truly proactive partner!
+Not only a workbench, a second brain, or a knowledge base—but a truly proactive partner!
 
 Based on Context-Engineering, we are dedicated to helping you work, study, and create better by collecting, processing, and utilizing your context.
 
