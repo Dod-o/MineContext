@@ -52,10 +52,16 @@ const ScreenMonitor: React.FC = () => {
     recordingHours,
     enableRecordingHours,
     applyToDays,
+    manualCaptureShortcutEnabled,
+    manualCaptureShortcut,
+    adaptiveCapture,
     setRecordInterval,
     setEnableRecordingHours,
     setRecordingHours,
-    setApplyToDays
+    setApplyToDays,
+    setManualCaptureShortcutEnabled,
+    setManualCaptureShortcut,
+    setAdaptiveCapture
   } = useSetting()
   const {
     currentSession,
@@ -106,6 +112,11 @@ const ScreenMonitor: React.FC = () => {
   const [tempEnableRecordingHours, setTempEnableRecordingHours] = useState(enableRecordingHours)
   const [tempRecordingHours, setTempRecordingHours] = useState<[string, string]>(recordingHours as [string, string])
   const [tempApplyToDays, setTempApplyToDays] = useState(applyToDays)
+  const [tempManualCaptureShortcutEnabled, setTempManualCaptureShortcutEnabled] = useState(
+    manualCaptureShortcutEnabled
+  )
+  const [tempManualCaptureShortcut, setTempManualCaptureShortcut] = useState(manualCaptureShortcut)
+  const [tempAdaptiveCapture, setTempAdaptiveCapture] = useState(adaptiveCapture)
 
   // Refresh the application list and trigger a re-render
   const refreshSourcesRead = useMemoizedFn(async () => {
@@ -209,7 +220,10 @@ const ScreenMonitor: React.FC = () => {
       recordInterval,
       recordingHours,
       enableRecordingHours,
-      applyToDays
+      applyToDays,
+      manualCaptureShortcutEnabled,
+      manualCaptureShortcut,
+      adaptiveCapture
     })
     await window.screenMonitorAPI.startTask()
     // Start polling for new activities
@@ -417,6 +431,9 @@ const ScreenMonitor: React.FC = () => {
     setTempEnableRecordingHours(enableRecordingHours)
     setTempRecordingHours(recordingHours as [string, string])
     setTempApplyToDays(applyToDays)
+    setTempManualCaptureShortcutEnabled(manualCaptureShortcutEnabled)
+    setTempManualCaptureShortcut(manualCaptureShortcut)
+    setTempAdaptiveCapture(adaptiveCapture)
     setSettingsVisible(false)
     setApplicationVisible(false)
   })
@@ -426,6 +443,9 @@ const ScreenMonitor: React.FC = () => {
     setEnableRecordingHours(tempEnableRecordingHours)
     setRecordingHours(tempRecordingHours as [string, string])
     setApplyToDays(tempApplyToDays)
+    setManualCaptureShortcutEnabled(tempManualCaptureShortcutEnabled)
+    setManualCaptureShortcut(tempManualCaptureShortcut)
+    setAdaptiveCapture(tempAdaptiveCapture)
     setSettingsVisible(false)
   })
 
@@ -551,6 +571,9 @@ const ScreenMonitor: React.FC = () => {
       setTempEnableRecordingHours(enableRecordingHours)
       setTempRecordingHours(recordingHours as [string, string])
       setTempApplyToDays(applyToDays)
+      setTempManualCaptureShortcutEnabled(manualCaptureShortcutEnabled)
+      setTempManualCaptureShortcut(manualCaptureShortcut)
+      setTempAdaptiveCapture(adaptiveCapture)
     }
   }, [settingSources, sources])
 
@@ -632,6 +655,9 @@ const ScreenMonitor: React.FC = () => {
           tempEnableRecordingHours={tempEnableRecordingHours}
           tempRecordingHours={tempRecordingHours}
           tempApplyToDays={tempApplyToDays}
+          tempManualCaptureShortcutEnabled={tempManualCaptureShortcutEnabled}
+          tempManualCaptureShortcut={tempManualCaptureShortcut}
+          tempAdaptiveCapture={tempAdaptiveCapture}
           onCancel={handleCancelSettings}
           onSave={handleSave}
           onSetApplicationVisible={setApplicationVisible}
@@ -639,6 +665,9 @@ const ScreenMonitor: React.FC = () => {
           onSetTempEnableRecordingHours={setTempEnableRecordingHours}
           onSetTempRecordingHours={setTempRecordingHours}
           onSetTempApplyToDays={setTempApplyToDays}
+          onSetTempManualCaptureShortcutEnabled={setTempManualCaptureShortcutEnabled}
+          onSetTempManualCaptureShortcut={setTempManualCaptureShortcut}
+          onSetTempAdaptiveCapture={setTempAdaptiveCapture}
         />
       </div>
     </div>

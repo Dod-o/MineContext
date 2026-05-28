@@ -1,9 +1,13 @@
 import React from 'react'
-import { Button, Modal, Slider, TimePicker, Radio, Form, Checkbox, Spin, Switch } from '@arco-design/web-react'
+import { Button, Modal, Slider, TimePicker, Radio, Form, Checkbox, Spin, Switch, Input } from '@arco-design/web-react'
 import clsx from 'clsx'
 import { Application } from './application'
 import screenIcon from '@renderer/assets/icons/screen.svg'
-import { ApplyToDays } from '@renderer/store/setting'
+import type {
+  AdaptiveCaptureRuleSetting,
+  AdaptiveCaptureSettings,
+  ApplyToDays
+} from '@renderer/store/setting'
 
 interface SettingsModalProps {
   visible: boolean
@@ -16,6 +20,9 @@ interface SettingsModalProps {
   tempEnableRecordingHours: boolean
   tempRecordingHours: [string, string]
   tempApplyToDays: string
+  tempManualCaptureShortcutEnabled: boolean
+  tempManualCaptureShortcut: string
+  tempAdaptiveCapture: AdaptiveCaptureSettings
   onCancel: () => void
   onSave: () => void
   onSetApplicationVisible: (visible: boolean) => void
@@ -23,6 +30,42 @@ interface SettingsModalProps {
   onSetTempEnableRecordingHours: (value: boolean) => void
   onSetTempRecordingHours: (value: [string, string]) => void
   onSetTempApplyToDays: (value: ApplyToDays) => void
+  onSetTempManualCaptureShortcutEnabled: (value: boolean) => void
+  onSetTempManualCaptureShortcut: (value: string) => void
+  onSetTempAdaptiveCapture: (value: AdaptiveCaptureSettings) => void
+}
+
+interface AdaptiveRuleControlProps {
+  label: string
+  description: string
+  value: AdaptiveCaptureRuleSetting
+  onChange: (value: AdaptiveCaptureRuleSetting) => void
+}
+
+const AdaptiveRuleControl: React.FC<AdaptiveRuleControlProps> = ({ label, description, value, onChange }) => {
+  return (
+    <div className="rounded-[8px] border border-[var(--mc-border,#E5E6EB)] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[13px] leading-[20px] text-[var(--mc-text-primary,#0b0b0f)]">{label}</div>
+          <div className="text-[11px] leading-[16px] text-[var(--mc-text-secondary,#6e718c)]">{description}</div>
+        </div>
+        <Switch checked={value.enabled} onChange={(enabled) => onChange({ ...value, enabled })} />
+      </div>
+      <Slider
+        value={value.delaySeconds}
+        disabled={!value.enabled}
+        onChange={(nextValue) => onChange({ ...value, delaySeconds: nextValue as number })}
+        min={1}
+        max={30}
+        marks={{
+          1: '1s',
+          30: '30s'
+        }}
+        formatTooltip={(nextValue) => `${nextValue}s`}
+      />
+    </div>
+  )
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -36,14 +79,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   tempEnableRecordingHours,
   tempRecordingHours,
   tempApplyToDays,
+  tempManualCaptureShortcutEnabled,
+  tempManualCaptureShortcut,
+  tempAdaptiveCapture,
   onCancel,
   onSave,
   onSetApplicationVisible,
   onSetTempRecordInterval,
   onSetTempEnableRecordingHours,
   onSetTempRecordingHours,
-  onSetTempApplyToDays
+  onSetTempApplyToDays,
+  onSetTempManualCaptureShortcutEnabled,
+  onSetTempManualCaptureShortcut,
+  onSetTempAdaptiveCapture
 }) => {
+  const updateAdaptiveRule = (
+    key: 'windowSwitch' | 'activeAppStable' | 'idleResume',
+    value: AdaptiveCaptureRuleSetting
+  ) => {
+    onSetTempAdaptiveCapture({
+      ...tempAdaptiveCapture,
+      [key]: value
+    })
+  }
+
   return (
     <Modal
       title="Settings"
@@ -64,7 +123,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </>
       }
       style={{ width: 682 }}>
-      <Form layout="vertical" form={form}>
+      <div className="max-h-[72vh] overflow-y-auto pr-1">
+        <Form layout="vertical" form={form}>
         <div className="flex w-full flex-1 mt-5">
           <div className="flex flex-col flex-1 pr-[24px]">
             <Form.Item label="Record Interval" className="[&_.arco-form-item-label]:!text-xs">
@@ -80,6 +140,53 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="!mt-4"
                 formatTooltip={(value) => `${value}s`}
               />
+            </Form.Item>
+            <Form.Item label="Manual capture shortcut" className="[&_.arco-form-item-label]:!text-xs">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={tempManualCaptureShortcutEnabled}
+                  onChange={onSetTempManualCaptureShortcutEnabled}
+                />
+                <Input
+                  value={tempManualCaptureShortcut}
+                  disabled={!tempManualCaptureShortcutEnabled}
+                  onChange={onSetTempManualCaptureShortcut}
+                  placeholder="CommandOrControl+Shift+S"
+                />
+              </div>
+            </Form.Item>
+            <Form.Item label="Adaptive capture rules" className="[&_.arco-form-item-label]:!text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary,#6e718c)]">
+                  Capture after meaningful workflow changes.
+                </div>
+                <Switch
+                  checked={tempAdaptiveCapture.enabled}
+                  onChange={(enabled) => onSetTempAdaptiveCapture({ ...tempAdaptiveCapture, enabled })}
+                />
+              </div>
+              {tempAdaptiveCapture.enabled && (
+                <div className="mt-3 flex flex-col gap-3">
+                  <AdaptiveRuleControl
+                    label="Window switch"
+                    description="Capture after the selected active source changes."
+                    value={tempAdaptiveCapture.windowSwitch}
+                    onChange={(value) => updateAdaptiveRule('windowSwitch', value)}
+                  />
+                  <AdaptiveRuleControl
+                    label="Active app stable"
+                    description="Capture once after the same source stays active."
+                    value={tempAdaptiveCapture.activeAppStable}
+                    onChange={(value) => updateAdaptiveRule('activeAppStable', value)}
+                  />
+                  <AdaptiveRuleControl
+                    label="Return from idle"
+                    description="Capture after the system becomes active again."
+                    value={tempAdaptiveCapture.idleResume}
+                    onChange={(value) => updateAdaptiveRule('idleResume', value)}
+                  />
+                </div>
+              )}
             </Form.Item>
             <Form.Item label="Choose what to record" shouldUpdate>
               {(values) => {
@@ -204,7 +311,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         </div>
-      </Form>
+        </Form>
+      </div>
     </Modal>
   )
 }

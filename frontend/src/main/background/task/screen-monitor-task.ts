@@ -1,7 +1,7 @@
-import { ScreenSettings } from './../../../renderer/src/store/setting';
+import { normalizeScreenSettings, type ScreenSettings } from '@shared/screen-settings'
 import { CaptureSource } from '@interface/common/source'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
-import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
+import { BrowserWindow, globalShortcut, ipcMain, powerMonitor } from 'electron'
 import { get, pick, uniqBy } from 'lodash'
 import screenshotService from '../../services/ScreenshotService'
 import { AutoRefreshCache } from './cache-value'
@@ -26,6 +26,10 @@ const queue = new PQueue({ concurrency: 3 })
 
 const logger = getLogger('ScreenMonitorTask')
 const IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS = 5 * 60
+const ADAPTIVE_CAPTURE_POLL_INTERVAL_MS = 1000
+
+type CaptureMode = 'scheduled' | 'manual' | 'shortcut' | 'adaptive'
+type AdaptiveCaptureReason = 'window-switch' | 'active-stable' | 'idle-resume'
 
 class ScreenMonitorTask extends ScheduleNextTask {
   static globalStatus: 'running' | 'stopped' = 'stopped'
@@ -33,6 +37,14 @@ class ScreenMonitorTask extends ScheduleNextTask {
   private appInfo: CaptureSource[] = []
   private configCache: AutoRefreshCache<CaptureSource[]> | null = null
   private modelConfig: Partial<ScreenSettings> = {}
+  private registeredManualShortcut: string | null = null
+  private adaptiveCaptureMonitorTimer: NodeJS.Timeout | null = null
+  private adaptiveCaptureTimers = new Map<AdaptiveCaptureReason, NodeJS.Timeout>()
+  private lastAdaptiveSourceSignature = ''
+  private stableSourceSignature = ''
+  private stableSourceSince = 0
+  private lastStableCaptureSignature = ''
+  private wasIdle = false
 
   constructor() {
     super()
@@ -54,12 +66,17 @@ class ScreenMonitorTask extends ScheduleNextTask {
         'ScreenMonitorTask updateCurrentRecordApp -->',
         appInfo.map((v) => pick(v, ['name', 'type']))
       )
-      this.appInfo = uniqBy([...this.appInfo, ...appInfo], 'id')
+      this.appInfo = uniqBy(appInfo, 'id')
       this.configCache?.triggerUpdate(true)
     })
     ipcMain.handle(IpcChannel.Task_Update_Model_Config, (_, config: ScreenSettings) => {
       this.modelConfig = config
-      this.updateInterval(config.recordInterval * 1000)
+      const settings = this.getEffectiveSettings()
+      this.updateInterval(settings.recordInterval * 1000)
+      if (this.status === 'running') {
+        this.registerManualCaptureShortcut()
+        this.startAdaptiveCaptureMonitor()
+      }
     })
     ipcMain.handle(IpcChannel.Task_Start, () => {
       logger.info('render notify ScreenMonitorTask start')
@@ -85,6 +102,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       logger.info('ScreenMonitorTask resume')
       if (ScreenMonitorTask.globalStatus === 'running') {
         this.startTask()
+        this.scheduleIdleResumeAdaptiveCapture()
       }
     })
     powerWatcher.registerSuspendCallback(() => {
@@ -99,6 +117,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       logger.info('ScreenMonitorTask unlock-screen', ScreenMonitorTask.globalStatus)
       if (ScreenMonitorTask.globalStatus === 'running') {
         this.startTask()
+        this.scheduleIdleResumeAdaptiveCapture()
       }
     })
   }
@@ -108,9 +127,11 @@ class ScreenMonitorTask extends ScheduleNextTask {
     }
 
     logger.info('ScreenMonitorTask startTask', this.configCache)
+    this.status = 'running'
+    this.registerManualCaptureShortcut()
+    this.startAdaptiveCaptureMonitor()
     this.configCache?.start()
     this.scheduleNextTask(true, this.startScreenMonitor.bind(this))
-    this.status = 'running'
     this.broadcastStatus()
   }
   private stopTask() {
@@ -118,6 +139,8 @@ class ScreenMonitorTask extends ScheduleNextTask {
       return
     }
     logger.info('ScreenMonitorTask stopTask')
+    this.unregisterManualCaptureShortcut()
+    this.stopAdaptiveCaptureMonitor()
     this.configCache?.stop()
     this.stopScheduleNextTask()
     this.status = 'stopped'
@@ -140,7 +163,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       return []
     }
   }
-  private async handleScreenshotTask(source: CaptureSource, createTime: Dayjs, captureMode: 'scheduled' | 'manual' = 'scheduled') {
+  private async handleScreenshotTask(source: CaptureSource, createTime: Dayjs, captureMode: CaptureMode = 'scheduled') {
     const res = await screenshotService.takeScreenshot(source.id, createTime)
 
     if (res.success) {
@@ -197,6 +220,192 @@ class ScreenMonitorTask extends ScheduleNextTask {
     }
     return false
   }
+  private getEffectiveSettings(): ScreenSettings {
+    return normalizeScreenSettings(this.modelConfig)
+  }
+
+  private registerManualCaptureShortcut() {
+    this.unregisterManualCaptureShortcut()
+
+    const settings = this.getEffectiveSettings()
+    const shortcut = settings.manualCaptureShortcut?.trim()
+    if (!settings.manualCaptureShortcutEnabled || !shortcut) {
+      return
+    }
+
+    try {
+      const registered = globalShortcut.register(shortcut, async () => {
+        if (this.status !== 'running') {
+          return
+        }
+        logger.info(`Manual capture shortcut triggered: ${shortcut}`)
+        await this.captureNow('shortcut')
+      })
+
+      if (registered) {
+        this.registeredManualShortcut = shortcut
+        logger.info(`Manual capture shortcut registered: ${shortcut}`)
+      } else {
+        logger.warn(`Manual capture shortcut could not be registered: ${shortcut}`)
+      }
+    } catch (error) {
+      logger.error(`Manual capture shortcut registration failed: ${shortcut}`, error)
+    }
+  }
+
+  private unregisterManualCaptureShortcut() {
+    if (!this.registeredManualShortcut) {
+      return
+    }
+
+    try {
+      globalShortcut.unregister(this.registeredManualShortcut)
+      logger.info(`Manual capture shortcut unregistered: ${this.registeredManualShortcut}`)
+    } catch (error) {
+      logger.error(`Manual capture shortcut unregister failed: ${this.registeredManualShortcut}`, error)
+    } finally {
+      this.registeredManualShortcut = null
+    }
+  }
+
+  private startAdaptiveCaptureMonitor() {
+    this.stopAdaptiveCaptureMonitor()
+    const settings = this.getEffectiveSettings()
+    if (!settings.adaptiveCapture.enabled) {
+      return
+    }
+
+    this.resetAdaptiveCaptureState()
+    this.adaptiveCaptureMonitorTimer = setInterval(() => {
+      this.evaluateAdaptiveCaptureRules().catch((error) => {
+        logger.error('Adaptive capture evaluation failed', error)
+      })
+    }, ADAPTIVE_CAPTURE_POLL_INTERVAL_MS)
+    this.evaluateAdaptiveCaptureRules().catch((error) => {
+      logger.error('Adaptive capture initial evaluation failed', error)
+    })
+  }
+
+  private stopAdaptiveCaptureMonitor() {
+    if (this.adaptiveCaptureMonitorTimer) {
+      clearInterval(this.adaptiveCaptureMonitorTimer)
+      this.adaptiveCaptureMonitorTimer = null
+    }
+    this.adaptiveCaptureTimers.forEach((timer) => clearTimeout(timer))
+    this.adaptiveCaptureTimers.clear()
+    this.resetAdaptiveCaptureState()
+  }
+
+  private resetAdaptiveCaptureState() {
+    this.lastAdaptiveSourceSignature = ''
+    this.stableSourceSignature = ''
+    this.stableSourceSince = 0
+    this.lastStableCaptureSignature = ''
+    this.wasIdle = false
+  }
+
+  private getAdaptiveCaptureSignature(visibleSources: CaptureSource[]) {
+    const selectedIds = new Set(this.appInfo.map((source) => source.id))
+    const selectedNames = new Set(this.appInfo.map((source) => source.name?.toLowerCase()).filter(Boolean))
+    const hasSelection = selectedIds.size > 0 || selectedNames.size > 0
+    const candidates = visibleSources.filter((source) => {
+      if (!source.isVisible) {
+        return false
+      }
+      if (!hasSelection) {
+        return true
+      }
+      return selectedIds.has(source.id) || selectedNames.has(source.name?.toLowerCase())
+    })
+    const source = candidates.find((item) => item.type === 'window') || candidates.find((item) => item.type === 'screen')
+    return source ? `${source.type}:${source.id}:${source.name || ''}` : ''
+  }
+
+  private scheduleAdaptiveCapture(reason: AdaptiveCaptureReason, delaySeconds: number) {
+    const existingTimer = this.adaptiveCaptureTimers.get(reason)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+    }
+
+    const delayMs = Math.max(0, delaySeconds) * 1000
+    const timer = setTimeout(async () => {
+      this.adaptiveCaptureTimers.delete(reason)
+      if (this.status !== 'running' || !this.checkCanRecord() || this.shouldSkipCaptureForIdleState()) {
+        return
+      }
+      logger.info(`Adaptive capture triggered: ${reason}`)
+      const result = await this.captureNow('adaptive')
+      logger.info(`Adaptive capture completed: ${reason}`, result)
+    }, delayMs)
+    this.adaptiveCaptureTimers.set(reason, timer)
+  }
+
+  private scheduleIdleResumeAdaptiveCapture() {
+    const settings = this.getEffectiveSettings()
+    const idleResume = settings.adaptiveCapture.idleResume
+    if (settings.adaptiveCapture.enabled && idleResume.enabled) {
+      this.scheduleAdaptiveCapture('idle-resume', idleResume.delaySeconds)
+    }
+  }
+
+  private async evaluateAdaptiveCaptureRules() {
+    if (this.status !== 'running' || !this.checkCanRecord()) {
+      return
+    }
+
+    const settings = this.getEffectiveSettings()
+    const rules = settings.adaptiveCapture
+    if (!rules.enabled) {
+      return
+    }
+
+    const idleState = powerMonitor.getSystemIdleState(IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS)
+    const isIdle = idleState === 'idle' || idleState === 'locked'
+    if (this.wasIdle && !isIdle && rules.idleResume.enabled) {
+      this.scheduleAdaptiveCapture('idle-resume', rules.idleResume.delaySeconds)
+    }
+    this.wasIdle = isIdle
+    if (isIdle) {
+      return
+    }
+
+    let visibleSources = this.configCache?.get()
+    if (!visibleSources || visibleSources.length === 0) {
+      visibleSources = await this.getVisibleSourcesUseCache()
+    }
+
+    const sourceSignature = this.getAdaptiveCaptureSignature(visibleSources)
+    if (!sourceSignature) {
+      return
+    }
+
+    if (
+      rules.windowSwitch.enabled &&
+      this.lastAdaptiveSourceSignature &&
+      sourceSignature !== this.lastAdaptiveSourceSignature
+    ) {
+      this.scheduleAdaptiveCapture('window-switch', rules.windowSwitch.delaySeconds)
+    }
+    this.lastAdaptiveSourceSignature = sourceSignature
+
+    if (sourceSignature !== this.stableSourceSignature) {
+      this.stableSourceSignature = sourceSignature
+      this.stableSourceSince = Date.now()
+      this.lastStableCaptureSignature = ''
+      return
+    }
+
+    const stableDelayMs = Math.max(1, rules.activeAppStable.delaySeconds) * 1000
+    if (
+      rules.activeAppStable.enabled &&
+      this.lastStableCaptureSignature !== sourceSignature &&
+      Date.now() - this.stableSourceSince >= stableDelayMs
+    ) {
+      this.lastStableCaptureSignature = sourceSignature
+      this.scheduleAdaptiveCapture('active-stable', 0)
+    }
+  }
+
   private async startScreenMonitor() {
     try {
       if (this.shouldSkipCaptureForIdleState()) {
@@ -242,7 +451,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       logger.error('startScreenMonitor error; recording will retry on the next interval', error)
     }
   }
-  public async captureNow() {
+  public async captureNow(captureMode: Exclude<CaptureMode, 'scheduled'> = 'manual') {
     try {
       let visibleSources = this.configCache?.get()
       if (!visibleSources || visibleSources.length === 0) {
@@ -258,7 +467,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
 
       const createTime = dayjs()
       const results = await Promise.allSettled(
-        sources.map((source) => this.handleScreenshotTask(source, createTime, 'manual'))
+        sources.map((source) => this.handleScreenshotTask(source, createTime, captureMode))
       )
       const capturedCount = results.filter((result) => result.status === 'fulfilled').length
       const failedCount = results.length - capturedCount
@@ -284,6 +493,8 @@ class ScreenMonitorTask extends ScheduleNextTask {
     this.configCache?.destroy()
     this.status = 'stopped'
     this.stopScheduleNextTask()
+    this.unregisterManualCaptureShortcut()
+    this.stopAdaptiveCaptureMonitor()
 
     ipcMain.removeHandler(IpcChannel.Task_Update_Model_Config)
     ipcMain.removeHandler(IpcChannel.Task_Start)
@@ -296,14 +507,14 @@ class ScreenMonitorTask extends ScheduleNextTask {
     url: string,
     type: CaptureSource['type'],
     createTime: Dayjs,
-    captureMode: 'scheduled' | 'manual'
+    captureMode: CaptureMode
   ): Promise<boolean> {
     try {
       const data = {
         path: url,
         window: type === 'screen' ? 'screen' : '',
         create_time: createTime.format('YYYY-MM-DD HH:mm:ss'),
-        source: captureMode === 'manual' ? `manual-${type}` : type
+        source: captureMode === 'scheduled' ? type : `${captureMode}-${type}`
       }
       const res = await axios.post(`http://127.0.0.1:${getBackendPort()}/api/add_screenshot`, data)
       if (res.status === 200) {

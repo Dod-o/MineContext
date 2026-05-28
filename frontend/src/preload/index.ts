@@ -12,7 +12,7 @@ import { CaptureSource } from '@interface/common/source'
 import type { ThemeMode, ThemeState } from '@shared/theme'
 
 import { VaultDocumentType } from '@shared/enums/global-enum'
-import { ScreenSettings } from '@renderer/store/setting'
+import type { ScreenSettings } from '@shared/screen-settings'
 
 // Custom APIs for renderer
 const api = {

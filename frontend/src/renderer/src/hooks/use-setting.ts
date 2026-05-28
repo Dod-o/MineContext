@@ -4,13 +4,27 @@
 import { useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import { RootState, useAppDispatch } from '@renderer/store'
-import { ApplyToDays, setScreenSettings as setScreenSettingsAction } from '@renderer/store/setting'
+import {
+  normalizeScreenSettings,
+  setScreenSettings as setScreenSettingsAction,
+  type AdaptiveCaptureSettings,
+  type ApplyToDays
+} from '@renderer/store/setting'
 
 export const useSetting = () => {
   const dispatch = useAppDispatch()
-  const screenSettings = useSelector((state: RootState) => state.setting.screenSettings)
+  const storedScreenSettings = useSelector((state: RootState) => state.setting.screenSettings)
+  const screenSettings = normalizeScreenSettings(storedScreenSettings)
 
-  const { recordInterval, recordingHours, enableRecordingHours, applyToDays } = screenSettings
+  const {
+    recordInterval,
+    recordingHours,
+    enableRecordingHours,
+    applyToDays,
+    manualCaptureShortcutEnabled,
+    manualCaptureShortcut,
+    adaptiveCapture
+  } = screenSettings
 
   const setRecordInterval = useCallback(
     (interval: number) => {
@@ -40,14 +54,41 @@ export const useSetting = () => {
     [dispatch]
   )
 
+  const setManualCaptureShortcutEnabled = useCallback(
+    (enabled: boolean) => {
+      dispatch(setScreenSettingsAction({ manualCaptureShortcutEnabled: enabled }))
+    },
+    [dispatch]
+  )
+
+  const setManualCaptureShortcut = useCallback(
+    (shortcut: string) => {
+      dispatch(setScreenSettingsAction({ manualCaptureShortcut: shortcut }))
+    },
+    [dispatch]
+  )
+
+  const setAdaptiveCapture = useCallback(
+    (settings: AdaptiveCaptureSettings) => {
+      dispatch(setScreenSettingsAction({ adaptiveCapture: settings }))
+    },
+    [dispatch]
+  )
+
   return {
     recordInterval,
     recordingHours,
     enableRecordingHours,
     applyToDays,
+    manualCaptureShortcutEnabled,
+    manualCaptureShortcut,
+    adaptiveCapture,
     setRecordInterval,
     setEnableRecordingHours,
     setRecordingHours,
-    setApplyToDays
+    setApplyToDays,
+    setManualCaptureShortcutEnabled,
+    setManualCaptureShortcut,
+    setAdaptiveCapture
   }
 }
