@@ -261,11 +261,18 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
 
   const [status, setStatus] = useState(TODO_LIST_STATUS.Create)
   const [visible, setVisible] = useState(false)
+  const timer = useRef<NodeJS.Timeout>(null)
   const handleCreateToDoList = useMemoizedFn(() => {
+    clearTimeout(timer.current!)
+    form.resetFields()
+    form.setFieldsValue({
+      id: undefined,
+      content: '',
+      urgency: TaskUrgency.Low
+    })
     setStatus(TODO_LIST_STATUS.Create)
     setVisible(true)
   })
-  const timer = useRef<NodeJS.Timeout>(null)
   const handleToggleTaskStatus = useMemoizedFn(async (task) => {
     let id = task.id
 
