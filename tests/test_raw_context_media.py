@@ -15,6 +15,11 @@ from opencontext.utils.raw_context_media import (
 )
 
 
+ROOT = Path(__file__).resolve().parents[1]
+CONTEXT_DETAIL_TEMPLATE = ROOT / "opencontext" / "web" / "templates" / "context_detail.html"
+WEB_ROUTES = ROOT / "opencontext" / "server" / "routes" / "web.py"
+
+
 class RawContextMediaTest(unittest.TestCase):
     def setUp(self):
         self._old_context_path = os.environ.get("CONTEXT_PATH")
@@ -57,6 +62,20 @@ class RawContextMediaTest(unittest.TestCase):
             self.assertEqual(model.content_path, str(image_path))
             self.assertIsNotNone(model.content_url)
             self.assertTrue(model.content_url.startswith("/context-files/"))
+
+    def test_context_detail_template_embeds_raw_image_content_url(self):
+        template = CONTEXT_DETAIL_TEMPLATE.read_text(encoding="utf-8")
+        web_routes = WEB_ROUTES.read_text(encoding="utf-8")
+
+        self.assertIn("raw_context.content_format == 'image'", template)
+        self.assertIn(
+            '<img src="{{ raw_context.content_url or (\'/files/\' ~ raw_context.content_path) }}"',
+            template,
+        )
+        self.assertIn('@router.get("/context-files/{path_token}")', web_routes)
+        self.assertIn("decode_context_media_path(path_token)", web_routes)
+        self.assertIn("validate_context_media_path(", web_routes)
+        self.assertIn("return FileResponse(str(media_path))", web_routes)
 
     def test_validate_context_media_path_allows_media_under_context_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
