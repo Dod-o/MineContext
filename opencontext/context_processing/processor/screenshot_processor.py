@@ -549,11 +549,9 @@ class ScreenshotProcessor(BaseContextProcessor):
             raise ValueError(f"Empty LLM response when merge items for context type: {context_type.value}")
 
         response_data = parse_json_from_response(response)
-        if not isinstance(response_data, dict):
-            logger.error(f"merge_items_with_llm, Invalid response format: {response_data}")
-            response_items = []
-        else:
-            response_items = self._extract_llm_items(response_data, f"merge {context_type.value}")
+        response_items = self._extract_llm_items(
+            response_data, f"merge {context_type.value}", allow_root_list=True
+        )
 
         # Process results and build ProcessedContext objects
         result_contexts = []

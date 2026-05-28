@@ -304,6 +304,56 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
             screenshot_processor_module.do_vectorize_async = original_vectorize
             screenshot_processor_module.refresh_entities = original_refresh
 
+    def test_merge_response_accepts_root_list(self):
+        processor = self._build_processor()
+        processor._processed_cache = {}
+        context = self._processed_context(1)
+
+        original_generate = screenshot_processor_module.generate_with_messages_async
+        original_parser = screenshot_processor_module.parse_json_from_response
+        original_prompt_group = screenshot_processor_module.get_prompt_group
+        original_vectorize = screenshot_processor_module.do_vectorize_async
+        original_refresh = screenshot_processor_module.refresh_entities
+
+        async def fake_generate(_messages):
+            return "ignored"
+
+        async def fake_vectorize(vectorize):
+            vectorize.vector = [0.1, 0.2]
+            return vectorize
+
+        async def fake_refresh(_entities, _text):
+            return []
+
+        screenshot_processor_module.generate_with_messages_async = fake_generate
+        screenshot_processor_module.parse_json_from_response = lambda _response: [
+            {"merge_type": "new", "merged_ids": [context.id], "data": {}}
+        ]
+        screenshot_processor_module.get_prompt_group = lambda _name: {
+            "system": "system",
+            "user": "{context_type} {items_json}",
+        }
+        screenshot_processor_module.do_vectorize_async = fake_vectorize
+        screenshot_processor_module.refresh_entities = fake_refresh
+
+        try:
+            result = asyncio.run(
+                processor._merge_items_with_llm(
+                    ContextType.ACTIVITY_CONTEXT,
+                    [context],
+                    [],
+                )
+            )
+
+            self.assertEqual([item.id for item in result["processed_contexts"]], [context.id])
+            self.assertEqual(list(result["new_ctxs"].keys()), [context.id])
+        finally:
+            screenshot_processor_module.generate_with_messages_async = original_generate
+            screenshot_processor_module.parse_json_from_response = original_parser
+            screenshot_processor_module.get_prompt_group = original_prompt_group
+            screenshot_processor_module.do_vectorize_async = original_vectorize
+            screenshot_processor_module.refresh_entities = original_refresh
+
 
 if __name__ == "__main__":
     unittest.main()
