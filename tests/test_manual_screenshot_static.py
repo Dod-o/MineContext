@@ -29,6 +29,19 @@ SCREEN_MONITOR_HEADER = (
     / "screen-monitor-header.tsx"
 )
 ELECTRON_TYPES = ROOT / "frontend" / "src" / "renderer" / "src" / "types" / "electron.d.ts"
+SETTINGS_MODAL = (
+    ROOT
+    / "frontend"
+    / "src"
+    / "renderer"
+    / "src"
+    / "pages"
+    / "screen-monitor"
+    / "components"
+    / "settings-modal.tsx"
+)
+USE_SETTING = ROOT / "frontend" / "src" / "renderer" / "src" / "hooks" / "use-setting.ts"
+SHARED_SCREEN_SETTINGS = ROOT / "frontend" / "packages" / "shared" / "screen-settings.ts"
 
 
 class ManualScreenshotStaticTest(unittest.TestCase):
@@ -50,6 +63,41 @@ class ManualScreenshotStaticTest(unittest.TestCase):
         self.assertIn("Capture Now", header)
         self.assertIn("captureMode: Exclude<CaptureMode, 'scheduled'> = 'manual'", task)
         self.assertIn("source: captureMode === 'scheduled' ? type : `${captureMode}-${type}`", task)
+
+    def test_manual_capture_shortcut_is_configurable_and_registered(self):
+        task = SCREEN_MONITOR_TASK.read_text(encoding="utf-8")
+        modal = SETTINGS_MODAL.read_text(encoding="utf-8")
+        use_setting = USE_SETTING.read_text(encoding="utf-8")
+        shared_settings = SHARED_SCREEN_SETTINGS.read_text(encoding="utf-8")
+
+        self.assertIn("manualCaptureShortcutEnabled: true", shared_settings)
+        self.assertIn("manualCaptureShortcut: 'CommandOrControl+Shift+S'", shared_settings)
+        self.assertIn("setManualCaptureShortcutEnabled", use_setting)
+        self.assertIn("setManualCaptureShortcut", use_setting)
+        self.assertIn("Manual capture shortcut", modal)
+        self.assertIn('placeholder="CommandOrControl+Shift+S"', modal)
+        self.assertIn("globalShortcut.register(shortcut", task)
+        self.assertIn("await this.captureNow('shortcut')", task)
+        self.assertIn("globalShortcut.unregister(this.registeredManualShortcut)", task)
+
+    def test_adaptive_capture_rules_are_configurable_and_trigger_captures(self):
+        task = SCREEN_MONITOR_TASK.read_text(encoding="utf-8")
+        modal = SETTINGS_MODAL.read_text(encoding="utf-8")
+        shared_settings = SHARED_SCREEN_SETTINGS.read_text(encoding="utf-8")
+
+        self.assertIn("defaultAdaptiveCaptureSettings", shared_settings)
+        self.assertIn("windowSwitch", shared_settings)
+        self.assertIn("activeAppStable", shared_settings)
+        self.assertIn("idleResume", shared_settings)
+        self.assertIn("Adaptive capture rules", modal)
+        self.assertIn("Window switch", modal)
+        self.assertIn("Active app stable", modal)
+        self.assertIn("Return from idle", modal)
+        self.assertIn("this.startAdaptiveCaptureMonitor()", task)
+        self.assertIn("this.scheduleAdaptiveCapture('window-switch'", task)
+        self.assertIn("this.scheduleAdaptiveCapture('active-stable'", task)
+        self.assertIn("this.scheduleAdaptiveCapture('idle-resume'", task)
+        self.assertIn("await this.captureNow('adaptive')", task)
 
 
 if __name__ == "__main__":
