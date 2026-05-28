@@ -12,6 +12,7 @@ import { isPackaged, actuallyDev, serverRunInFrontend, getResourcesPath } from '
 import { IpcChannel } from '@shared/IpcChannel'
 import { is } from '@electron-toolkit/utils'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
+import { resolveAppDataRoot } from './utils/data-path'
 
 let backendLogFile: string | null = null
 let backendProcess: any = null
@@ -194,11 +195,7 @@ function normalizePathForCompare(value: string): string {
 }
 
 function getExpectedContextPath(): string {
-  if (!app.isPackaged && is.dev) {
-    return path.resolve(getResourcesPath(), 'backend')
-  }
-
-  return path.resolve(app.getPath('userData'))
+  return resolveAppDataRoot()
 }
 
 function backendUsesExpectedContextPath(healthCheckResult: unknown): boolean {
@@ -595,7 +592,7 @@ async function startBackendServer(mainWindow: BrowserWindow) {
       // Prepare environment variables
       const env = {
         ...process.env,
-        CONTEXT_PATH: !app.isPackaged && is.dev ? '.' : app.getPath('userData')
+        CONTEXT_PATH: resolveAppDataRoot()
       } as Record<string, string>
 
       // Prepare command line arguments: ./main start --port <port> --config config/config.yaml
