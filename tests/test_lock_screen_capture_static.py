@@ -29,6 +29,18 @@ class LockScreenCaptureStaticTest(unittest.TestCase):
         self.assertIn("stopActivityPolling()", page)
         self.assertIn("stopStatsPolling()", page)
 
+    def test_screen_capture_skips_when_idle_locked_or_screen_saver_active(self):
+        task = SCREEN_MONITOR_TASK.read_text(encoding="utf-8")
+
+        self.assertIn("isScreenSaverActive()", task)
+        self.assertIn(
+            "powerMonitor.getSystemIdleState(IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS)",
+            task,
+        )
+        self.assertIn("idleState === 'idle' || idleState === 'locked'", task)
+        self.assertIn("Skipping screen capture while system is", task)
+        self.assertIn("this.shouldSkipCaptureForIdleState())", task)
+
 
 if __name__ == "__main__":
     unittest.main()
