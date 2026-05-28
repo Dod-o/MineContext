@@ -161,6 +161,55 @@
                             <i class="bi bi-arrow-clockwise"></i> 重置
                         </button>
                     </form>
+                    <div class="border rounded p-3 mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">本地图片存储</h5>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadImageStorageStatus()">
+                                <i class="bi bi-arrow-clockwise"></i> 刷新
+                            </button>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="text-muted small">图片数量</div>
+                                <div class="fs-5" id="imageStorageCount">--</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-muted small">占用空间</div>
+                                <div class="fs-5" id="imageStorageSize">--</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-muted small">最新文件</div>
+                                <div class="fs-6" id="imageStorageNewest">--</div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">扫描目录</label>
+                            <pre class="bg-light border rounded p-2 small mb-0" id="imageStorageRoots">加载中...</pre>
+                        </div>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label for="imageRetentionDays" class="form-label">保留天数</label>
+                                <input type="number" class="form-control" id="imageRetentionDays" min="0">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="imageMaxSizeMb" class="form-label">最大空间 MB</label>
+                                <input type="number" class="form-control" id="imageMaxSizeMb" min="0" step="1">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="imageMaxFileCount" class="form-label">最大数量</label>
+                                <input type="number" class="form-control" id="imageMaxFileCount" min="0" step="1">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="imageCleanupDryRun">
+                                    <label class="form-check-label" for="imageCleanupDryRun">只预览</label>
+                                </div>
+                                <button type="button" class="btn btn-danger w-100" onclick="cleanupImageStorage()">
+                                    <i class="bi bi-trash"></i> 清理图片
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

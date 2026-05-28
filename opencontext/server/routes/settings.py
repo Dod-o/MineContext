@@ -19,6 +19,11 @@ from opencontext.llm.global_vlm_client import GlobalVLMClient
 from opencontext.llm.llm_client import LLMClient, LLMType
 from opencontext.server.middleware.auth import auth_dependency
 from opencontext.server.utils import convert_resp
+from opencontext.utils.image_storage import (
+    cleanup_image_storage,
+    get_image_storage_roots,
+    get_image_storage_status,
+)
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -55,6 +60,15 @@ class UpdateModelSettingsResponse(BaseModel):
     message: str
 
 
+class ImageStorageCleanupRequest(BaseModel):
+    """Manual local image storage cleanup request."""
+
+    retention_days: int | None = None
+    max_total_size_mb: float | None = None
+    max_file_count: int | None = None
+    dry_run: bool = False
+
+
 # ==================== Helper Functions ====================
 
 
@@ -75,6 +89,12 @@ def _build_llm_config(
 
 def _requires_api_key(provider: str | None) -> bool:
     return (provider or "").lower() != LLMProvider.CUSTOM.value
+
+
+def _get_image_retention_config(config: dict) -> dict:
+    return config.get("processing", {}).get("screenshot_processor", {}).get(
+        "image_retention", {}
+    )
 
 
 # ==================== API Endpoints ====================
@@ -278,6 +298,72 @@ async def get_system_info(_auth: str = auth_dependency):
     except Exception as e:
         logger.exception(f"Failed to get system info: {e}")
         return convert_resp(code=500, status=500, message=f"Failed to get system info: {str(e)}")
+
+
+@router.get("/api/settings/image_storage")
+async def get_image_storage(_auth: str = auth_dependency):
+    """Get local screenshot/image storage status."""
+    try:
+        config = GlobalConfig.get_instance().get_config()
+        if not config:
+            return convert_resp(code=500, status=500, message="Configuration not initialized")
+
+        roots = get_image_storage_roots(config)
+        status = get_image_storage_status(roots)
+        status["retention"] = _get_image_retention_config(config)
+        return convert_resp(data=status)
+    except Exception as e:
+        logger.exception(f"Failed to get image storage status: {e}")
+        return convert_resp(
+            code=500, status=500, message=f"Failed to get image storage status: {str(e)}"
+        )
+
+
+@router.post("/api/settings/image_storage/cleanup")
+async def cleanup_local_image_storage(
+    request: ImageStorageCleanupRequest, _auth: str = auth_dependency
+):
+    """Delete local screenshot/image files without touching semantic context data."""
+    try:
+        config = GlobalConfig.get_instance().get_config()
+        if not config:
+            return convert_resp(code=500, status=500, message="Configuration not initialized")
+
+        retention = _get_image_retention_config(config)
+        retention_days = (
+            request.retention_days
+            if request.retention_days is not None
+            else retention.get("retention_days")
+        )
+        max_total_size_mb = (
+            request.max_total_size_mb
+            if request.max_total_size_mb is not None
+            else retention.get("max_total_size_mb")
+        )
+        max_file_count = (
+            request.max_file_count
+            if request.max_file_count is not None
+            else retention.get("max_file_count")
+        )
+
+        if retention_days is None and max_total_size_mb is None and max_file_count is None:
+            return convert_resp(code=400, status=400, message="No cleanup policy provided")
+
+        roots = get_image_storage_roots(config)
+        result = cleanup_image_storage(
+            roots,
+            retention_days=retention_days,
+            max_total_size_mb=max_total_size_mb,
+            max_file_count=max_file_count,
+            dry_run=request.dry_run,
+        )
+        result["status"] = get_image_storage_status(roots)
+        return convert_resp(data=result)
+    except Exception as e:
+        logger.exception(f"Failed to clean up image storage: {e}")
+        return convert_resp(
+            code=500, status=500, message=f"Failed to clean up image storage: {str(e)}"
+        )
 
 
 # ==================== General Settings ====================

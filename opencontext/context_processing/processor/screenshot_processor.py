@@ -32,9 +32,10 @@ from opencontext.monitoring.monitor import record_processing_error
 from opencontext.storage.global_storage import get_storage
 from opencontext.tools.tool_definitions import ALL_TOOL_DEFINITIONS
 from opencontext.utils.image import calculate_phash, normalize_hdr_screenshot, resize_image
+from opencontext.utils.image_storage import cleanup_image_storage, get_image_storage_roots
 from opencontext.utils.json_parser import parse_json_from_response
 from opencontext.utils.logging_utils import get_logger
-from opencontext.config.global_config import get_prompt_group
+from opencontext.config.global_config import get_config, get_prompt_group
 from opencontext.monitoring import (
     increment_data_count,
     increment_recording_stat,
@@ -70,6 +71,8 @@ class ScreenshotProcessor(BaseContextProcessor):
         self._resize_quality = self.config.get("resize_quality", 95)
         self._normalize_hdr_screenshots = self.config.get("normalize_hdr_screenshots", True)
         self._enabled_delete = self.config.get("enabled_delete", False)
+        self._image_retention = self.config.get("image_retention", {})
+        self._last_image_cleanup_at = 0.0
 
         self._stop_event = threading.Event()
 
@@ -111,6 +114,33 @@ class ScreenshotProcessor(BaseContextProcessor):
         return (
             isinstance(context, RawContextProperties) and context.source == ContextSource.SCREENSHOT
         )
+
+    def _maybe_cleanup_image_storage(self) -> None:
+        retention = self._image_retention or {}
+        if not retention.get("enabled", False):
+            return
+
+        interval_seconds = max(0.0, float(retention.get("cleanup_interval_hours", 24)) * 3600)
+        now = time.time()
+        if self._last_image_cleanup_at and interval_seconds:
+            if now - self._last_image_cleanup_at < interval_seconds:
+                return
+        self._last_image_cleanup_at = now
+
+        result = cleanup_image_storage(
+            get_image_storage_roots(get_config() or {}),
+            retention_days=retention.get("retention_days"),
+            max_total_size_mb=retention.get("max_total_size_mb"),
+            max_file_count=retention.get("max_file_count"),
+        )
+        if result["deleted_count"]:
+            logger.info(
+                "Image retention cleanup deleted "
+                f"{result['deleted_count']} files "
+                f"({result['deleted_size_mb']} MB)"
+            )
+        if result["errors"]:
+            logger.warning(f"Image retention cleanup skipped {len(result['errors'])} files")
 
     def _is_duplicate(self, new_context: RawContextProperties) -> bool:
         """
@@ -264,6 +294,7 @@ class ScreenshotProcessor(BaseContextProcessor):
 
             except ImportError:
                 pass
+            self._maybe_cleanup_image_storage()
             unprocessed_contexts.clear()
             batch_started_at = None
 

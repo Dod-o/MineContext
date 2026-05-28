@@ -92,6 +92,12 @@ processing:
     normalize_hdr_screenshots: true # Correct washed-out HDR captures before VLM processing
     enabled_delete: true
     max_raw_properties: 5
+    image_retention:
+      enabled: true
+      retention_days: 15 # Delete recognized screenshots older than this many days
+      max_total_size_mb: 2048 # Keep total local image data under this size
+      max_file_count: 10000 # Keep only the newest image files once this count is exceeded
+      cleanup_interval_hours: 24 # Scheduled cleanup interval while processing screenshots
 
   # Context merger configuration
   context_merger:

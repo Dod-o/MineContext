@@ -47,6 +47,26 @@ function formatApiError(data, response, fallback) {
     return `${fallback}: ${detail}`;
 }
 
+function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+    return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function parseOptionalNumber(elementId) {
+    const value = document.getElementById(elementId)?.value;
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return '--';
+    return new Date(timestamp * 1000).toLocaleString();
+}
+
 // ==================== 截图捕获设置 ====================
 
 async function loadCaptureSettings() {
@@ -106,6 +126,72 @@ document.getElementById('captureForm')?.addEventListener('submit', async (e) => 
         showToast('保存失败', true);
     }
 });
+
+async function loadImageStorageStatus() {
+    try {
+        const response = await fetch('/api/settings/image_storage');
+        const data = await response.json();
+
+        if (data.code !== 0 || !data.data) {
+            showToast(formatApiError(data, response, '加载图片存储状态失败'), true);
+            return;
+        }
+
+        const status = data.data;
+        document.getElementById('imageStorageCount').textContent = status.count ?? 0;
+        document.getElementById('imageStorageSize').textContent = formatBytes(status.size_bytes);
+        document.getElementById('imageStorageNewest').textContent = formatTimestamp(status.newest_mtime);
+
+        const roots = status.roots || [];
+        document.getElementById('imageStorageRoots').textContent = roots.length
+            ? roots.map(root => `${root.path} (${root.count || 0} files, ${formatBytes(root.size_bytes)})`).join('\n')
+            : '未配置';
+
+        const retention = status.retention || {};
+        document.getElementById('imageRetentionDays').value = retention.retention_days ?? '';
+        document.getElementById('imageMaxSizeMb').value = retention.max_total_size_mb ?? '';
+        document.getElementById('imageMaxFileCount').value = retention.max_file_count ?? '';
+    } catch (error) {
+        console.error('加载图片存储状态失败:', error);
+        showToast('加载图片存储状态失败', true);
+    }
+}
+
+async function cleanupImageStorage() {
+    const dryRun = document.getElementById('imageCleanupDryRun').checked;
+    if (!dryRun && !confirm('确定清理本地图片文件吗？已提取的语义文本不会被删除。')) {
+        return;
+    }
+
+    const payload = {
+        retention_days: parseOptionalNumber('imageRetentionDays'),
+        max_total_size_mb: parseOptionalNumber('imageMaxSizeMb'),
+        max_file_count: parseOptionalNumber('imageMaxFileCount'),
+        dry_run: dryRun
+    };
+
+    try {
+        const response = await fetch('/api/settings/image_storage/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        if (data.code !== 0 || !data.data) {
+            showToast(formatApiError(data, response, '图片清理失败'), true);
+            return;
+        }
+
+        const result = data.data;
+        const verb = dryRun ? '预计清理' : '已清理';
+        showToast(`${verb} ${result.deleted_count || 0} 个文件，释放 ${formatBytes(result.deleted_size_bytes)}`);
+        await loadImageStorageStatus();
+    } catch (error) {
+        console.error('图片清理失败:', error);
+        showToast('图片清理失败', true);
+    }
+}
 
 // ==================== 处理配置 ====================
 
@@ -603,6 +689,7 @@ document.getElementById('modelForm')?.addEventListener('submit', async (e) => {
 document.addEventListener('DOMContentLoaded', function() {
     loadModelSettings();
     loadCaptureSettings();
+    loadImageStorageStatus();
     loadProcessingSettings();
     loadGenerationSettings();
     loadPromptsToCategories();  // 使用新的加载函数
