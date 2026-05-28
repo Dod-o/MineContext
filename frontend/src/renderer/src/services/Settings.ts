@@ -27,6 +27,8 @@ export interface ModelProfileProps {
   updated_at?: string
 }
 
+export type PromptsConfigProps = Record<string, unknown>
+
 // Complete API response structure
 export interface ApiResponse<T> {
   code: number
@@ -75,4 +77,13 @@ export const validateModelSettingsAPI = async (params: ModelConfigProps): Promis
     }
   })
   return get(res, 'data.message') || 'Model API connection is available'
+}
+
+export const getPromptsAPI = async (): Promise<PromptsConfigProps> => {
+  const res = await axiosInstance.get<ApiResponse<{ prompts: PromptsConfigProps }>>('/api/settings/prompts')
+  return get(res, 'data.data.prompts') || {}
+}
+
+export const updatePromptsAPI = async (prompts: PromptsConfigProps): Promise<void> => {
+  await axiosInstance.post('/api/settings/prompts', { prompts })
 }

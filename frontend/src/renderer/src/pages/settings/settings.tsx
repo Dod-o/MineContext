@@ -20,8 +20,11 @@ import {
   deleteModelProfileAPI,
   getModelInfo,
   getModelProfilesAPI,
+  getPromptsAPI,
   ModelConfigProps,
   ModelProfileProps,
+  PromptsConfigProps,
+  updatePromptsAPI,
   updateModelSettingsAPI
 } from '../../services/Settings'
 import { useMemoizedFn, useMount, useRequest } from 'ahooks'
@@ -236,6 +239,99 @@ type ModelConfigField =
 export type SettingsFormProps = SettingsFormBase &
   Partial<Record<`${ModelTypeList}-${ModelConfigField}`, string>>
 
+interface PromptPair {
+  system: string
+  user: string
+}
+
+interface PromptCategoryOption {
+  label: string
+  value: string
+  description: string
+}
+
+const PROMPT_CATEGORY_OPTIONS: PromptCategoryOption[] = [
+  {
+    label: 'Todo extraction',
+    value: 'generation.todo_extraction',
+    description: 'Control task scope, language, detail level, priority rules, and output structure.'
+  },
+  {
+    label: 'Smart tips',
+    value: 'generation.smart_tip_generation',
+    description: 'Control suggestion style, planning focus, and reminder strictness.'
+  },
+  {
+    label: 'Daily report',
+    value: 'generation.generation_report',
+    description: 'Control report scope, summarization granularity, and future-task handling.'
+  },
+  {
+    label: 'Activity monitor',
+    value: 'generation.realtime_activity_monitor',
+    description: 'Control real-time activity title and summary style.'
+  }
+]
+
+const NON_PROMPT_TOP_LEVEL_KEYS = new Set([
+  'api_auth',
+  'capture',
+  'completion',
+  'consumption',
+  'content_generation',
+  'embedding_model',
+  'logging',
+  'storage',
+  'vlm_model',
+  'web'
+])
+
+const stripNonPromptTopLevelKeys = (prompts: PromptsConfigProps): PromptsConfigProps => {
+  return Object.fromEntries(
+    Object.entries(prompts || {}).filter(([key]) => !NON_PROMPT_TOP_LEVEL_KEYS.has(key))
+  ) as PromptsConfigProps
+}
+
+const clonePrompts = (prompts: PromptsConfigProps): PromptsConfigProps => {
+  return JSON.parse(JSON.stringify(stripNonPromptTopLevelKeys(prompts)))
+}
+
+const getPromptPair = (prompts: PromptsConfigProps, path: string): PromptPair => {
+  const target = path.split('.').reduce<unknown>((value, key) => {
+    if (!value || typeof value !== 'object') return undefined
+    return (value as Record<string, unknown>)[key]
+  }, prompts)
+
+  if (!target || typeof target !== 'object') {
+    return { system: '', user: '' }
+  }
+
+  const prompt = target as Record<string, unknown>
+  return {
+    system: typeof prompt.system === 'string' ? prompt.system : '',
+    user: typeof prompt.user === 'string' ? prompt.user : ''
+  }
+}
+
+const setPromptPair = (prompts: PromptsConfigProps, path: string, pair: PromptPair): PromptsConfigProps => {
+  const nextPrompts = clonePrompts(prompts)
+  const pathParts = path.split('.')
+  let target = nextPrompts as Record<string, unknown>
+
+  pathParts.slice(0, -1).forEach((part) => {
+    if (!target[part] || typeof target[part] !== 'object') {
+      target[part] = {}
+    }
+    target = target[part] as Record<string, unknown>
+  })
+
+  target[pathParts[pathParts.length - 1]] = {
+    system: pair.system,
+    user: pair.user
+  }
+  return nextPrompts
+}
+
 const Settings: FC<SettingsProps> = (props) => {
   const { closeSetting, init } = props
 
@@ -253,6 +349,11 @@ const Settings: FC<SettingsProps> = (props) => {
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string>()
   const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
   const [selectedProfileName, setSelectedProfileName] = useState<string>()
+  const [prompts, setPrompts] = useState<PromptsConfigProps>({})
+  const [promptLoading, setPromptLoading] = useState(false)
+  const [promptSaving, setPromptSaving] = useState(false)
+  const [selectedPromptPath, setSelectedPromptPath] = useState(PROMPT_CATEGORY_OPTIONS[0].value)
+  const [promptDraft, setPromptDraft] = useState<PromptPair>({ system: '', user: '' })
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
   const { run: getProfiles } = useRequest(getModelProfilesAPI, {
     manual: true,
@@ -371,9 +472,42 @@ const Settings: FC<SettingsProps> = (props) => {
     }
   })
 
+  const selectedPromptCategory = useMemo(() => {
+    return PROMPT_CATEGORY_OPTIONS.find((option) => option.value === selectedPromptPath) || PROMPT_CATEGORY_OPTIONS[0]
+  }, [selectedPromptPath])
+
+  const loadPrompts = useMemoizedFn(async () => {
+    setPromptLoading(true)
+    try {
+      const loadedPrompts = stripNonPromptTopLevelKeys(await getPromptsAPI())
+      setPrompts(loadedPrompts)
+    } catch (error: any) {
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to load system prompts')
+    } finally {
+      setPromptLoading(false)
+    }
+  })
+
+  const handleSavePrompt = useMemoizedFn(async () => {
+    setPromptSaving(true)
+    try {
+      const nextPrompts = setPromptPair(prompts, selectedPromptPath, promptDraft)
+      await updatePromptsAPI(nextPrompts)
+      setPrompts(nextPrompts)
+      Message.success('System prompt saved')
+    } catch (error: any) {
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to save system prompt')
+    } finally {
+      setPromptSaving(false)
+    }
+  })
+
   useMount(() => {
     getInfo()
     getProfiles()
+    if (!init) {
+      loadPrompts()
+    }
     ;(async () => {
       try {
         const enabled = await window.api.getLaunchOnBoot()
@@ -508,6 +642,10 @@ const Settings: FC<SettingsProps> = (props) => {
       setRuntimeSettingsSaving(false)
     }
   })
+
+  useEffect(() => {
+    setPromptDraft(getPromptPair(prompts, selectedPromptPath))
+  }, [prompts, selectedPromptPath])
 
   useEffect(() => {
     const config = get(modelInfo, 'config')
@@ -683,6 +821,75 @@ const Settings: FC<SettingsProps> = (props) => {
                     Raw screenshot retention changes apply after app restart.
                   </div>
                 )}
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">System prompts</div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      Tune generated todos, reminders, reports, and activity summaries.
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button size="small" icon={<IconRefresh />} loading={promptLoading} onClick={loadPrompts}>
+                      Reload
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<IconSave />}
+                      loading={promptSaving}
+                      onClick={handleSavePrompt}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+                <Spin loading={promptLoading} block>
+                  <div className="mb-3 flex flex-col gap-2">
+                    <Select
+                      value={selectedPromptPath}
+                      options={PROMPT_CATEGORY_OPTIONS.map((option) => ({
+                        label: option.label,
+                        value: option.value
+                      }))}
+                      onChange={(value) => setSelectedPromptPath(value as string)}
+                      className="!w-full"
+                    />
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      {selectedPromptCategory.description}
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">System prompt</div>
+                    <Input.TextArea
+                      value={promptDraft.system}
+                      autoSize={{ minRows: 5, maxRows: 12 }}
+                      placeholder="System prompt"
+                      onChange={(value) =>
+                        setPromptDraft((draft) => ({
+                          ...draft,
+                          system: value
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">User prompt</div>
+                    <Input.TextArea
+                      value={promptDraft.user}
+                      autoSize={{ minRows: 4, maxRows: 10 }}
+                      placeholder="User prompt"
+                      onChange={(value) =>
+                        setPromptDraft((draft) => ({
+                          ...draft,
+                          user: value
+                        }))
+                      }
+                    />
+                  </div>
+                </Spin>
               </div>
             )}
             {!init && modelProfiles.length > 0 && (
