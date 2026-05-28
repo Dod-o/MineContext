@@ -51,6 +51,20 @@ ReportGenerator = generation_report_module.ReportGenerator
 NO_ACTIVITY_REPORT = generation_report_module.NO_ACTIVITY_REPORT
 
 
+class _EmptyReportStorage:
+    def get_all_processed_contexts(self, *args, **kwargs):
+        return {}
+
+    def get_tips(self, *args, **kwargs):
+        return []
+
+    def get_todos(self, *args, **kwargs):
+        return []
+
+    def get_activities(self, *args, **kwargs):
+        return []
+
+
 class ReportGeneratorTest(unittest.TestCase):
     def test_daily_report_title_uses_start_time_date(self):
         generator = ReportGenerator.__new__(ReportGenerator)
@@ -80,6 +94,32 @@ class ReportGeneratorTest(unittest.TestCase):
         generator = _NoActivityReportGenerator.__new__(_NoActivityReportGenerator)
 
         self.assertEqual(asyncio.run(generator.generate_report(1, 2)), NO_ACTIVITY_REPORT)
+
+    def test_empty_report_chunk_skips_llm_generation(self):
+        calls = []
+
+        async def fake_generate_with_messages_async(messages):
+            calls.append(messages)
+            return "unexpected report"
+
+        generator = ReportGenerator.__new__(ReportGenerator)
+        original_get_storage = generation_report_module.get_storage
+        original_get_prompt_group = generation_report_module.get_prompt_group
+        original_generate = generation_report_module.generate_with_messages_async
+
+        try:
+            generation_report_module.get_storage = lambda: _EmptyReportStorage()
+            generation_report_module.get_prompt_group = lambda _name: {"system": "", "user": ""}
+            generation_report_module.generate_with_messages_async = fake_generate_with_messages_async
+
+            result = asyncio.run(generator._process_single_chunk_async(1, 2))
+        finally:
+            generation_report_module.get_storage = original_get_storage
+            generation_report_module.get_prompt_group = original_get_prompt_group
+            generation_report_module.generate_with_messages_async = original_generate
+
+        self.assertIsNone(result)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":
