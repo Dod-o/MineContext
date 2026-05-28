@@ -291,6 +291,7 @@ async function loadGenerationSettings() {
 
             document.getElementById('todos_enabled').checked = gen.todos?.enabled !== false;
             document.getElementById('todos_interval').value = gen.todos?.interval || 1800;
+            document.getElementById('todos_approval_mode').value = gen.todos?.approval_mode || 'review';
 
             document.getElementById('report_enabled').checked = gen.report?.enabled !== false;
             document.getElementById('report_time').value = gen.report?.time || '08:00';
@@ -316,7 +317,8 @@ document.getElementById('generationForm')?.addEventListener('submit', async (e) 
             },
             todos: {
                 enabled: document.getElementById('todos_enabled').checked,
-                interval: parseInt(document.getElementById('todos_interval').value)
+                interval: parseInt(document.getElementById('todos_interval').value),
+                approval_mode: document.getElementById('todos_approval_mode').value
             },
             report: {
                 enabled: document.getElementById('report_enabled').checked,

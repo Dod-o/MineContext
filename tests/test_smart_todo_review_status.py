@@ -20,6 +20,7 @@ def _install_fake_dependencies():
         package.__path__ = []
 
     fake_config = types.ModuleType("opencontext.config.global_config")
+    fake_config.get_config = lambda _path=None: {}
     fake_config.get_prompt_group = lambda _: {"system": "", "user": ""}
     sys.modules[fake_config.__name__] = fake_config
 
@@ -103,6 +104,42 @@ class SmartTodoReviewStatusTest(unittest.TestCase):
             smart_todo_module.TODO_STATUS_REVIEW,
         )
         storage.upsert_todo_embedding.assert_called_once()
+
+    def test_generated_todos_can_be_auto_added_by_config(self):
+        manager = smart_todo_module.SmartTodoManager()
+        storage = Mock()
+        storage.insert_todo.return_value = 124
+        storage.get_todos.return_value = []
+
+        tasks = [
+            {
+                "description": "Send the meeting notes",
+                "priority": "medium",
+                "participants": [],
+                "reason": "Meeting wrap-up was visible in recent activity",
+            }
+        ]
+
+        with (
+            patch.object(manager, "_get_recent_activity_insights", return_value={}),
+            patch.object(manager, "_get_task_relevant_contexts", return_value=[]),
+            patch.object(manager, "_extract_tasks_from_contexts_enhanced", return_value=tasks),
+            patch.object(smart_todo_module, "get_storage", return_value=storage),
+            patch.object(
+                smart_todo_module,
+                "get_config",
+                return_value={"approval_mode": smart_todo_module.TODO_APPROVAL_MODE_AUTO_ADD},
+            ),
+        ):
+            result = manager.generate_todo_tasks(start_time=1, end_time=2)
+
+        self.assertEqual(result["todo_ids"], [124])
+        self.assertEqual(result["approval_mode"], smart_todo_module.TODO_APPROVAL_MODE_AUTO_ADD)
+        self.assertIn("added", result["content"])
+        self.assertEqual(
+            storage.insert_todo.call_args.kwargs["status"],
+            smart_todo_module.TODO_STATUS_PENDING,
+        )
 
     def test_existing_user_todos_are_passed_to_extraction(self):
         manager = smart_todo_module.SmartTodoManager()

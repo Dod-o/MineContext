@@ -48,6 +48,11 @@ class TodosConfig(BaseModel):
     interval: Optional[int] = Field(
         None, ge=1800, description="Interval in seconds, minimum 1800 (30 minutes)"
     )
+    approval_mode: Optional[str] = Field(
+        None,
+        pattern="^(review|auto_add)$",
+        description="Generated todo handling mode: review first or add automatically",
+    )
 
 
 class ReportConfig(BaseModel):
@@ -112,6 +117,8 @@ async def update_content_generation_config(
                     task_dict["enabled"] = task_config.enabled
                 if task_config.interval is not None:
                     task_dict["interval"] = task_config.interval
+                if task_name == "todos" and task_config.approval_mode is not None:
+                    task_dict["approval_mode"] = task_config.approval_mode
                 if task_dict:
                     config_dict[task_name] = task_dict
         if config.report is not None:

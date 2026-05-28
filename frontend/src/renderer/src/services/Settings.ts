@@ -29,10 +29,12 @@ export interface ModelProfileProps {
 
 export type PromptsConfigProps = Record<string, unknown>
 export type PromptLanguage = 'en' | 'zh'
+export type TodoApprovalMode = 'review' | 'auto_add'
 
 export interface ContentGenerationIntervalConfigProps {
   enabled?: boolean
   interval?: number
+  approval_mode?: TodoApprovalMode
 }
 
 export interface ContentGenerationReportConfigProps {

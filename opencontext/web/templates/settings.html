@@ -347,6 +347,13 @@
                                     <input type="number" class="form-control" id="todos_interval" min="1800">
                                     <small class="text-muted">推荐: 1800-3600秒 (30-60分钟)</small>
                                 </div>
+                                <div class="mb-3">
+                                    <label for="todos_approval_mode" class="form-label">生成处理方式</label>
+                                    <select class="form-select" id="todos_approval_mode">
+                                        <option value="review">先审核后添加</option>
+                                        <option value="auto_add">自动添加</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 

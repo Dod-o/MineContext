@@ -26,6 +26,15 @@ from opencontext.storage.global_storage import get_storage
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+TODO_APPROVAL_MODE_REVIEW = "review"
+TODO_APPROVAL_MODE_AUTO_ADD = "auto_add"
+TODO_APPROVAL_MODES = {TODO_APPROVAL_MODE_REVIEW, TODO_APPROVAL_MODE_AUTO_ADD}
+
+
+def _normalize_todo_approval_mode(value: Any) -> str:
+    if isinstance(value, str) and value.lower() in TODO_APPROVAL_MODES:
+        return value.lower()
+    return TODO_APPROVAL_MODE_REVIEW
 
 
 class ConsumptionManager:
@@ -73,6 +82,9 @@ class ConsumptionManager:
             "todos": content_gen_config.get("todos", {}).get("enabled", True),
             "report": content_gen_config.get("report", {}).get("enabled", True),
         }
+        self._todo_approval_mode = _normalize_todo_approval_mode(
+            content_gen_config.get("todos", {}).get("approval_mode")
+        )
 
         # Maintain local last successful generation time
         self._last_generation_times = {
@@ -497,6 +509,7 @@ class ConsumptionManager:
                 "todos": {
                     "enabled": self._task_enabled.get("todos", True),
                     "interval": self._task_intervals.get("todos", 30 * 60),
+                    "approval_mode": self._todo_approval_mode,
                 },
                 "report": {
                     "enabled": self._task_enabled.get("report", True),
@@ -548,6 +561,13 @@ class ConsumptionManager:
             if old_interval != new_interval and self._task_enabled.get(task_name, True):
                 logger.info(f"Updating {task_name} interval to {new_interval}s")
                 need_restart = True
+
+        if task_name == "todos" and "approval_mode" in task_cfg:
+            old_mode = self._todo_approval_mode
+            new_mode = _normalize_todo_approval_mode(task_cfg["approval_mode"])
+            self._todo_approval_mode = new_mode
+            if old_mode != new_mode:
+                logger.info(f"Updating todos approval mode to {new_mode}")
 
         if need_restart:
             self._restart_task_timer(task_name)

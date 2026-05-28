@@ -30,6 +30,7 @@ import {
   ModelProfileProps,
   PromptLanguage,
   PromptsConfigProps,
+  TodoApprovalMode,
   updateGeneralSettingsAPI,
   updatePromptLanguageAPI,
   updatePromptsAPI,
@@ -291,6 +292,11 @@ interface GenerationIntervalOption {
   minInterval: number
 }
 
+type NormalizedGenerationIntervalConfig = ContentGenerationIntervalConfigProps & {
+  enabled: boolean
+  interval: number
+}
+
 const GENERATION_INTERVAL_OPTIONS: GenerationIntervalOption[] = [
   {
     key: 'activity',
@@ -326,7 +332,8 @@ const DEFAULT_CONTENT_GENERATION_SETTINGS: ContentGenerationConfigProps = {
   },
   todos: {
     enabled: true,
-    interval: 1800
+    interval: 1800,
+    approval_mode: 'review'
   },
   report: {
     enabled: true,
@@ -396,13 +403,17 @@ const setPromptPair = (prompts: PromptsConfigProps, path: string, pair: PromptPa
 const normalizeIntervalConfig = (
   config: ContentGenerationIntervalConfigProps | undefined,
   fallbackInterval: number
-): Required<ContentGenerationIntervalConfigProps> => {
+): NormalizedGenerationIntervalConfig => {
   const interval = Number(config?.interval)
   return {
     ...(config || {}),
     enabled: config?.enabled !== false,
     interval: Number.isFinite(interval) && interval > 0 ? interval : fallbackInterval
   }
+}
+
+const normalizeTodoApprovalMode = (mode: unknown): TodoApprovalMode => {
+  return mode === 'auto_add' ? 'auto_add' : 'review'
 }
 
 const normalizeReportTime = (time: unknown): string => {
@@ -415,7 +426,10 @@ const normalizeContentGenerationSettings = (settings?: ContentGenerationConfigPr
     ...source,
     activity: normalizeIntervalConfig(source.activity, 900),
     tips: normalizeIntervalConfig(source.tips, 3600),
-    todos: normalizeIntervalConfig(source.todos, 1800),
+    todos: {
+      ...normalizeIntervalConfig(source.todos, 1800),
+      approval_mode: normalizeTodoApprovalMode(source.todos?.approval_mode)
+    },
     report: {
       ...(source.report || {}),
       enabled: source.report?.enabled !== false,
@@ -427,7 +441,7 @@ const normalizeContentGenerationSettings = (settings?: ContentGenerationConfigPr
 const getGenerationIntervalConfig = (
   settings: ContentGenerationConfigProps,
   option: GenerationIntervalOption
-): Required<ContentGenerationIntervalConfigProps> => {
+): NormalizedGenerationIntervalConfig => {
   return normalizeIntervalConfig(
     settings[option.key] as ContentGenerationIntervalConfigProps | undefined,
     option.fallbackInterval
@@ -1081,6 +1095,19 @@ const Settings: FC<SettingsProps> = (props) => {
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-3">
+                            {option.key === 'todos' && (
+                              <Radio.Group
+                                type="button"
+                                value={normalizeTodoApprovalMode(config.approval_mode)}
+                                onChange={(value) =>
+                                  updateContentGenerationInterval('todos', {
+                                    approval_mode: value as TodoApprovalMode
+                                  })
+                                }>
+                                <Radio value="review">Review</Radio>
+                                <Radio value="auto_add">Auto add</Radio>
+                              </Radio.Group>
+                            )}
                             <Switch
                               checked={config.enabled}
                               onChange={(checked) => updateContentGenerationInterval(option.key, { enabled: checked })}

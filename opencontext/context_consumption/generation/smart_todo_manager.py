@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TypedDict
 
-from opencontext.config.global_config import get_prompt_group
+from opencontext.config.global_config import get_config, get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
 from opencontext.llm.global_vlm_client import generate_with_messages
 from opencontext.models.context import ContextType, Vectorize
@@ -23,8 +23,12 @@ from opencontext.utils.json_parser import parse_json_from_response
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+TODO_STATUS_PENDING = 0
 TODO_STATUS_COMPLETED = 1
 TODO_STATUS_REVIEW = 2
+TODO_APPROVAL_MODE_REVIEW = "review"
+TODO_APPROVAL_MODE_AUTO_ADD = "auto_add"
+TODO_APPROVAL_MODES = {TODO_APPROVAL_MODE_REVIEW, TODO_APPROVAL_MODE_AUTO_ADD}
 
 
 @dataclass
@@ -56,6 +60,13 @@ class SmartTodoManager:
         priority_map = {"low": 0, "medium": 1, "high": 2, "urgent": 3}
         return priority_map.get(priority.lower(), 0)
 
+    def _get_todo_approval_mode(self) -> str:
+        config = get_config("content_generation.todos") or {}
+        mode = config.get("approval_mode") if isinstance(config, dict) else None
+        if isinstance(mode, str) and mode.lower() in TODO_APPROVAL_MODES:
+            return mode.lower()
+        return TODO_APPROVAL_MODE_REVIEW
+
     def generate_todo_tasks(self, start_time: int, end_time: int) -> Optional[str]:
         """
         Generate Todo tasks based on recent activity, combining activity insights and historical todo information.
@@ -75,6 +86,12 @@ class SmartTodoManager:
             if not tasks:
                 return None
             # Store in the SQLite todo table
+            approval_mode = self._get_todo_approval_mode()
+            todo_status = (
+                TODO_STATUS_PENDING
+                if approval_mode == TODO_APPROVAL_MODE_AUTO_ADD
+                else TODO_STATUS_REVIEW
+            )
             todo_ids = []
             for task in tasks:
                 participants_str = ""
@@ -98,7 +115,7 @@ class SmartTodoManager:
 
                 todo_id = get_storage().insert_todo(
                     content=content,
-                    status=TODO_STATUS_REVIEW,
+                    status=todo_status,
                     urgency=urgency,
                     end_time=deadline,
                     assignee=participants_str,
@@ -123,10 +140,16 @@ class SmartTodoManager:
                         logger.warning(f"Failed to store todo embedding for {todo_id}: {e}")
 
             # Return the complete result for external event processing
+            result_content = (
+                f"{len(todo_ids)} task suggestions were added."
+                if approval_mode == TODO_APPROVAL_MODE_AUTO_ADD
+                else f"{len(todo_ids)} task suggestions are ready for review."
+            )
             return {
-                "content": f"{len(todo_ids)} task suggestions are ready for review.",
+                "content": result_content,
                 "todo_ids": todo_ids,
                 "tasks": tasks,
+                "approval_mode": approval_mode,
             }
 
         except Exception as e:
