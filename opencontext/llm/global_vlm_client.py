@@ -23,6 +23,8 @@ from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+MODEL_ASSIGNMENTS_CONFIG_KEY = "model_assignments"
+
 
 class GlobalVLMClient:
     """
@@ -49,6 +51,7 @@ class GlobalVLMClient:
                     self._vlm_client: Optional[LLMClient] = None
                     self._vlm_clients: list[LLMClient] = []
                     self._vlm_configs: list[Dict[str, Any]] = []
+                    self._vlm_config_names: list[str] = []
                     self._active_client_index = 0
                     self._auto_initialized = False
                     GlobalVLMClient._initialized = True
@@ -109,17 +112,18 @@ class GlobalVLMClient:
             vlm_config = get_config("vlm_model")
             config = {"vlm_model": vlm_config} if vlm_config else {}
 
-        candidates = [config.get("vlm_model")]
+        candidates = [("default", config.get("vlm_model"))]
         for profile in config.get("model_profiles", []) or []:
             if isinstance(profile, dict):
-                candidates.append(profile.get("config") or profile)
+                candidates.append((profile.get("name") or "", profile.get("config") or profile))
 
         configs = []
         seen = set()
-        for candidate in candidates:
+        for profile_name, candidate in candidates:
             normalized = self._normalize_vlm_config(candidate)
             if not normalized:
                 continue
+            normalized["_profile_name"] = str(profile_name or normalized.get("model") or "")
             key = self._vlm_config_key(normalized)
             if key in seen:
                 continue
@@ -143,6 +147,7 @@ class GlobalVLMClient:
     def _set_vlm_clients(self, clients: list[LLMClient], configs: list[Dict[str, Any]]):
         self._vlm_clients = clients
         self._vlm_configs = configs
+        self._vlm_config_names = [str(config.get("_profile_name") or "") for config in configs]
         self._active_client_index = 0
         self._vlm_client = clients[0] if clients else None
 
@@ -150,10 +155,24 @@ class GlobalVLMClient:
         self._active_client_index = index
         self._vlm_client = self._vlm_clients[index]
 
-    def _ordered_clients(self):
+    def _model_profile_index(self, model_profile: Optional[str]) -> Optional[int]:
+        if not model_profile:
+            return None
+        profile_key = model_profile.casefold()
+        for index, name in enumerate(self._vlm_config_names):
+            if name.casefold() == profile_key:
+                return index
+        return None
+
+    def _ordered_clients(self, model_profile: Optional[str] = None):
         if not self._vlm_clients:
             raise RuntimeError("GlobalVLMClient is not initialized")
-        start = min(max(self._active_client_index, 0), len(self._vlm_clients) - 1)
+        assigned_index = self._model_profile_index(model_profile)
+        start = (
+            assigned_index
+            if assigned_index is not None
+            else min(max(self._active_client_index, 0), len(self._vlm_clients) - 1)
+        )
         for offset in range(len(self._vlm_clients)):
             index = (start + offset) % len(self._vlm_clients)
             yield index, self._vlm_clients[index]
@@ -172,9 +191,9 @@ class GlobalVLMClient:
             f"trying next configured model: {error}"
         )
 
-    def _run_with_failover(self, method_name: str, *args, **kwargs):
+    def _run_with_failover(self, method_name: str, *args, model_profile: Optional[str] = None, **kwargs):
         last_error = None
-        for index, client in self._ordered_clients():
+        for index, client in self._ordered_clients(model_profile):
             try:
                 result = getattr(client, method_name)(*args, **kwargs)
                 if index != self._active_client_index:
@@ -188,9 +207,11 @@ class GlobalVLMClient:
                 self._log_client_failure(index, client, e)
         raise last_error
 
-    async def _run_with_failover_async(self, method_name: str, *args, **kwargs):
+    async def _run_with_failover_async(
+        self, method_name: str, *args, model_profile: Optional[str] = None, **kwargs
+    ):
         last_error = None
-        for index, client in self._ordered_clients():
+        for index, client in self._ordered_clients(model_profile):
             try:
                 result = await getattr(client, method_name)(*args, **kwargs)
                 if index != self._active_client_index:
@@ -204,9 +225,9 @@ class GlobalVLMClient:
                 self._log_client_failure(index, client, e)
         raise last_error
 
-    async def _stream_with_failover(self, method_name: str, *args, **kwargs):
+    async def _stream_with_failover(self, method_name: str, *args, model_profile: Optional[str] = None, **kwargs):
         last_error = None
-        for index, client in self._ordered_clients():
+        for index, client in self._ordered_clients(model_profile):
             yielded = False
             try:
                 async for chunk in getattr(client, method_name)(*args, **kwargs):
@@ -272,9 +293,16 @@ class GlobalVLMClient:
             return True
 
     def generate_with_messages(
-        self, messages: list, enable_executor: bool = True, max_calls: int = 5, **kwargs
+        self,
+        messages: list,
+        enable_executor: bool = True,
+        max_calls: int = 5,
+        model_profile: Optional[str] = None,
+        **kwargs,
     ):
-        response = self._run_with_failover("generate_with_messages", messages, **kwargs)
+        response = self._run_with_failover(
+            "generate_with_messages", messages, model_profile=model_profile, **kwargs
+        )
         call_count = 0
         while enable_executor:
             call_count += 1
@@ -288,7 +316,9 @@ class GlobalVLMClient:
                         "content": f"System notice: Maximum tool call limit ({max_calls}) reached. Cannot execute more tool calls. Please answer the user's question directly without attempting more tool calls.",
                     }
                 )
-                response = self._run_with_failover("generate_with_messages", messages, **kwargs)
+                response = self._run_with_failover(
+                    "generate_with_messages", messages, model_profile=model_profile, **kwargs
+                )
                 break
             message = response.choices[0].message
             if not message.tool_calls:
@@ -328,16 +358,23 @@ class GlobalVLMClient:
                         "tool_call_id": tool_id,
                     }
                 )
-            response = self._run_with_failover("generate_with_messages", messages, **kwargs)
+            response = self._run_with_failover(
+                "generate_with_messages", messages, model_profile=model_profile, **kwargs
+            )
 
         message = response.choices[0].message
         return message.content
 
     async def generate_with_messages_async(
-        self, messages: list, enable_executor: bool = True, max_calls: int = 5, **kwargs
+        self,
+        messages: list,
+        enable_executor: bool = True,
+        max_calls: int = 5,
+        model_profile: Optional[str] = None,
+        **kwargs,
     ):
         response = await self._run_with_failover_async(
-            "generate_with_messages_async", messages, **kwargs
+            "generate_with_messages_async", messages, model_profile=model_profile, **kwargs
         )
         call_count = 0
         while enable_executor:
@@ -351,7 +388,7 @@ class GlobalVLMClient:
                     }
                 )
                 response = await self._run_with_failover_async(
-                    "generate_with_messages_async", messages, **kwargs
+                    "generate_with_messages_async", messages, model_profile=model_profile, **kwargs
                 )
                 break
             message = response.choices[0].message
@@ -391,7 +428,7 @@ class GlobalVLMClient:
 
             # Call LLM again
             response = await self._run_with_failover_async(
-                "generate_with_messages_async", messages, **kwargs
+                "generate_with_messages_async", messages, model_profile=model_profile, **kwargs
             )
 
         message = response.choices[0].message
@@ -480,3 +517,28 @@ async def generate_stream_for_agent(messages: list, tools: list = None, **kwargs
         messages, tools, **kwargs
     ):
         yield chunk
+
+
+def get_feature_model_profile(feature_key: Optional[str]) -> Optional[str]:
+    """Return the configured model profile for a feature, if one is assigned."""
+    if not feature_key:
+        return None
+
+    assignments = get_config(MODEL_ASSIGNMENTS_CONFIG_KEY) or {}
+    if not isinstance(assignments, dict):
+        return None
+
+    feature_assignments = assignments.get("features", {})
+    if not isinstance(feature_assignments, dict):
+        return None
+
+    candidates = [feature_key]
+    short_key = feature_key.rsplit(".", 1)[-1]
+    if short_key != feature_key:
+        candidates.append(short_key)
+
+    for candidate in candidates:
+        profile_name = feature_assignments.get(candidate)
+        if isinstance(profile_name, str) and profile_name.strip():
+            return profile_name.strip()
+    return None

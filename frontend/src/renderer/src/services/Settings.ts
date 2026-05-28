@@ -27,6 +27,10 @@ export interface ModelProfileProps {
   updated_at?: string
 }
 
+export interface FeatureModelAssignmentsProps {
+  features: Record<string, string>
+}
+
 export type PromptsConfigProps = Record<string, unknown>
 export type PromptLanguage = 'en' | 'zh'
 export type TodoApprovalMode = 'review' | 'auto_add'
@@ -79,6 +83,17 @@ export const getModelProfilesAPI = async (): Promise<ModelProfileProps[]> => {
 
 export const deleteModelProfileAPI = async (name: string): Promise<void> => {
   await axiosInstance.post('/api/model_settings/profiles/delete', { name })
+}
+
+export const getFeatureModelAssignmentsAPI = async (): Promise<FeatureModelAssignmentsProps> => {
+  const res = await axiosInstance.get('/api/model_settings/feature_assignments')
+  return get(res, 'data.data.assignments') || { features: {} }
+}
+
+export const updateFeatureModelAssignmentsAPI = async (
+  assignments: FeatureModelAssignmentsProps
+): Promise<void> => {
+  await axiosInstance.post('/api/model_settings/feature_assignments', { assignments })
 }
 
 // Update model settings information

@@ -14,7 +14,10 @@ from typing import Any, Dict, List, Optional
 
 from opencontext.config.global_config import get_prompt_group
 from opencontext.context_consumption.generation.debug_helper import DebugHelper
-from opencontext.llm.global_vlm_client import generate_with_messages_async
+from opencontext.llm.global_vlm_client import (
+    generate_with_messages_async,
+    get_feature_model_profile,
+)
 from opencontext.models.enums import ContextType
 from opencontext.storage.global_storage import get_storage
 from opencontext.tools.tool_definitions import ALL_TOOL_DEFINITIONS
@@ -206,7 +209,10 @@ class ReportGenerator:
                 ),
             },
         ]
-        summary = await generate_with_messages_async(messages)
+        summary = await generate_with_messages_async(
+            messages,
+            model_profile=get_feature_model_profile("content_generation.report"),
+        )
 
         if summary:
             return {"start_time": chunk_start, "end_time": chunk_end, "summary": summary}
@@ -251,7 +257,10 @@ class ReportGenerator:
         ]
 
         # Generate report with LLM
-        report = await generate_with_messages_async(messages)
+        report = await generate_with_messages_async(
+            messages,
+            model_profile=get_feature_model_profile("content_generation.report"),
+        )
 
         if not report:
             logger.error("Failed to generate report.")

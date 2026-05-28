@@ -82,6 +82,18 @@ class DeleteModelProfileRequest(BaseModel):
     name: str
 
 
+class FeatureModelAssignmentsVO(BaseModel):
+    features: dict[str, str] = Field(default_factory=dict)
+
+
+class UpdateFeatureModelAssignmentsRequest(BaseModel):
+    assignments: FeatureModelAssignmentsVO
+
+
+class GetFeatureModelAssignmentsResponse(BaseModel):
+    assignments: FeatureModelAssignmentsVO
+
+
 class ImageStorageCleanupRequest(BaseModel):
     """Manual local image storage cleanup request."""
 
@@ -153,6 +165,34 @@ def _upsert_model_profile(
     return [profile.model_dump() for profile in merged[:20]]
 
 
+def _get_feature_model_assignments(config: dict) -> FeatureModelAssignmentsVO:
+    assignments = config.get("model_assignments", {}) if isinstance(config, dict) else {}
+    features = assignments.get("features", {}) if isinstance(assignments, dict) else {}
+    if not isinstance(features, dict):
+        features = {}
+    return FeatureModelAssignmentsVO(
+        features={
+            str(key): str(value)
+            for key, value in features.items()
+            if str(key).strip() and str(value).strip()
+        }
+    )
+
+
+def _validate_assigned_profiles(
+    assignments: FeatureModelAssignmentsVO, profiles: list[ModelProfileVO]
+) -> list[str]:
+    valid_names = {profile.name for profile in profiles}
+    invalid_names = sorted(
+        {
+            profile_name
+            for profile_name in assignments.features.values()
+            if profile_name and profile_name not in valid_names
+        }
+    )
+    return invalid_names
+
+
 # ==================== API Endpoints ====================
 
 
@@ -221,8 +261,26 @@ async def delete_model_profile(request: DeleteModelProfileRequest, _auth: str = 
             if len(profiles) == len(current_profiles):
                 return convert_resp(code=404, status=404, message="Model profile not found")
 
+            model_assignments = config.get("model_assignments", {})
+            if isinstance(model_assignments, dict):
+                feature_assignments = model_assignments.get("features", {})
+                if isinstance(feature_assignments, dict):
+                    model_assignments = {
+                        **model_assignments,
+                        "features": {
+                            key: value
+                            for key, value in feature_assignments.items()
+                            if value != request.name
+                        },
+                    }
+            else:
+                model_assignments = {}
+
             if not config_mgr.save_user_settings(
-                {"model_profiles": [profile.model_dump() for profile in profiles]}
+                {
+                    "model_profiles": [profile.model_dump() for profile in profiles],
+                    "model_assignments": model_assignments,
+                }
             ):
                 return convert_resp(code=500, status=500, message="Failed to save profiles")
             config_mgr.load_config(config_mgr.get_config_path())
@@ -231,6 +289,77 @@ async def delete_model_profile(request: DeleteModelProfileRequest, _auth: str = 
             logger.exception(f"Failed to delete model profile: {e}")
             return convert_resp(
                 code=500, status=500, message=f"Failed to delete model profile: {str(e)}"
+            )
+
+
+@router.get("/api/model_settings/feature_assignments")
+async def get_feature_model_assignments(_auth: str = auth_dependency):
+    """Get per-feature model profile assignments."""
+    try:
+        config = GlobalConfig.get_instance().get_config()
+        if not config:
+            return convert_resp(code=500, status=500, message="Configuration not initialized")
+
+        assignments = _get_feature_model_assignments(config)
+        return convert_resp(
+            data=GetFeatureModelAssignmentsResponse(assignments=assignments).model_dump()
+        )
+    except Exception as e:
+        logger.exception(f"Failed to get feature model assignments: {e}")
+        return convert_resp(
+            code=500,
+            status=500,
+            message=f"Failed to get feature model assignments: {str(e)}",
+        )
+
+
+@router.post("/api/model_settings/feature_assignments")
+async def update_feature_model_assignments(
+    request: UpdateFeatureModelAssignmentsRequest, _auth: str = auth_dependency
+):
+    """Persist model profile assignments for built-in feature tasks."""
+    with _config_lock:
+        try:
+            config_mgr = GlobalConfig.get_instance().get_config_manager()
+            if not config_mgr:
+                return convert_resp(code=500, status=500, message="Config manager not initialized")
+
+            config = GlobalConfig.get_instance().get_config() or {}
+            assignments = FeatureModelAssignmentsVO(
+                features={
+                    str(key): str(value).strip()
+                    for key, value in request.assignments.features.items()
+                    if str(key).strip() and str(value).strip()
+                }
+            )
+            invalid_names = _validate_assigned_profiles(assignments, _get_model_profiles(config))
+            if invalid_names:
+                return convert_resp(
+                    code=400,
+                    status=400,
+                    message=f"Unknown model profiles: {', '.join(invalid_names)}",
+                )
+
+            existing_assignments = config.get("model_assignments", {})
+            if not isinstance(existing_assignments, dict):
+                existing_assignments = {}
+            model_assignments = {
+                **existing_assignments,
+                "features": assignments.features,
+            }
+
+            if not config_mgr.save_user_settings({"model_assignments": model_assignments}):
+                return convert_resp(
+                    code=500, status=500, message="Failed to save feature model assignments"
+                )
+            config_mgr.load_config(config_mgr.get_config_path())
+            return convert_resp(message="Feature model assignments saved")
+        except Exception as e:
+            logger.exception(f"Failed to update feature model assignments: {e}")
+            return convert_resp(
+                code=500,
+                status=500,
+                message=f"Failed to update feature model assignments: {str(e)}",
             )
 
 

@@ -21,6 +21,7 @@ import {
   ContentGenerationConfigProps,
   ContentGenerationIntervalConfigProps,
   deleteModelProfileAPI,
+  getFeatureModelAssignmentsAPI,
   getGeneralSettingsAPI,
   getModelInfo,
   getModelProfilesAPI,
@@ -32,6 +33,7 @@ import {
   PromptsConfigProps,
   TodoApprovalMode,
   updateGeneralSettingsAPI,
+  updateFeatureModelAssignmentsAPI,
   updatePromptLanguageAPI,
   updatePromptsAPI,
   updateModelSettingsAPI
@@ -283,6 +285,7 @@ const PROMPT_CATEGORY_OPTIONS: PromptCategoryOption[] = [
 ]
 
 type GenerationIntervalKey = 'activity' | 'tips' | 'todos'
+type FeatureModelAssignmentKey = GenerationIntervalKey | 'report'
 
 interface GenerationIntervalOption {
   key: GenerationIntervalKey
@@ -339,6 +342,10 @@ const DEFAULT_CONTENT_GENERATION_SETTINGS: ContentGenerationConfigProps = {
     enabled: true,
     time: '08:00'
   }
+}
+
+const getFeatureModelAssignmentKey = (key: FeatureModelAssignmentKey): string => {
+  return `content_generation.${key}`
 }
 
 const NON_PROMPT_TOP_LEVEL_KEYS = new Set([
@@ -475,6 +482,7 @@ const Settings: FC<SettingsProps> = (props) => {
   const [contentGenerationSettings, setContentGenerationSettings] = useState<ContentGenerationConfigProps>(
     DEFAULT_CONTENT_GENERATION_SETTINGS
   )
+  const [featureModelAssignments, setFeatureModelAssignments] = useState<Record<string, string>>({})
   const [contentGenerationLoading, setContentGenerationLoading] = useState(false)
   const [contentGenerationSaving, setContentGenerationSaving] = useState(false)
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
@@ -599,6 +607,29 @@ const Settings: FC<SettingsProps> = (props) => {
     return PROMPT_CATEGORY_OPTIONS.find((option) => option.value === selectedPromptPath) || PROMPT_CATEGORY_OPTIONS[0]
   }, [selectedPromptPath])
 
+  const modelProfileOptions = useMemo(() => {
+    return [
+      { label: 'Default model', value: '' },
+      ...modelProfiles.map((profile) => ({
+        label: profile.name,
+        value: profile.name
+      }))
+    ]
+  }, [modelProfiles])
+
+  const updateFeatureModelAssignment = useMemoizedFn((key: FeatureModelAssignmentKey, profileName: string) => {
+    const assignmentKey = getFeatureModelAssignmentKey(key)
+    setFeatureModelAssignments((assignments) => {
+      const nextAssignments = { ...assignments }
+      if (profileName) {
+        nextAssignments[assignmentKey] = profileName
+      } else {
+        delete nextAssignments[assignmentKey]
+      }
+      return nextAssignments
+    })
+  })
+
   const loadPrompts = useMemoizedFn(async () => {
     setPromptLoading(true)
     try {
@@ -628,8 +659,9 @@ const Settings: FC<SettingsProps> = (props) => {
   const loadContentGenerationSettings = useMemoizedFn(async () => {
     setContentGenerationLoading(true)
     try {
-      const settings = await getGeneralSettingsAPI()
+      const [settings, assignments] = await Promise.all([getGeneralSettingsAPI(), getFeatureModelAssignmentsAPI()])
       setContentGenerationSettings(normalizeContentGenerationSettings(settings.content_generation))
+      setFeatureModelAssignments(assignments.features || {})
     } catch (error: any) {
       Message.error(
         get(error, 'response.data.message') || get(error, 'message') || 'Failed to load content generation settings'
@@ -643,8 +675,14 @@ const Settings: FC<SettingsProps> = (props) => {
     setContentGenerationSaving(true)
     try {
       const nextSettings = normalizeContentGenerationSettings(contentGenerationSettings)
+      const validProfileNames = new Set(modelProfiles.map((profile) => profile.name))
+      const nextFeatureAssignments = Object.fromEntries(
+        Object.entries(featureModelAssignments).filter(([, profileName]) => validProfileNames.has(profileName))
+      )
       await updateGeneralSettingsAPI({ content_generation: nextSettings })
+      await updateFeatureModelAssignmentsAPI({ features: nextFeatureAssignments })
       setContentGenerationSettings(nextSettings)
+      setFeatureModelAssignments(nextFeatureAssignments)
       Message.success('Content generation settings saved')
     } catch (error: any) {
       Message.error(
@@ -1084,67 +1122,90 @@ const Settings: FC<SettingsProps> = (props) => {
                   <div className="flex flex-col gap-4">
                     {GENERATION_INTERVAL_OPTIONS.map((option) => {
                       const config = getGenerationIntervalConfig(contentGenerationSettings, option)
+                      const assignmentKey = getFeatureModelAssignmentKey(option.key)
                       return (
-                        <div key={option.key} className="flex items-center justify-between gap-4">
-                          <div>
-                            <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
-                              {option.label}
+                        <div key={option.key} className="border-b border-[var(--mc-border)] pb-3 last:border-b-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                                {option.label}
+                              </div>
+                              <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                                {option.description}
+                              </div>
                             </div>
-                            <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                              {option.description}
+                            <div className="flex shrink-0 items-center gap-3">
+                              {option.key === 'todos' && (
+                                <Radio.Group
+                                  type="button"
+                                  value={normalizeTodoApprovalMode(config.approval_mode)}
+                                  onChange={(value) =>
+                                    updateContentGenerationInterval('todos', {
+                                      approval_mode: value as TodoApprovalMode
+                                    })
+                                  }>
+                                  <Radio value="review">Review</Radio>
+                                  <Radio value="auto_add">Auto add</Radio>
+                                </Radio.Group>
+                              )}
+                              <Switch
+                                checked={config.enabled}
+                                onChange={(checked) => updateContentGenerationInterval(option.key, { enabled: checked })}
+                              />
+                              <InputNumber
+                                min={option.minInterval}
+                                precision={0}
+                                step={60}
+                                value={config.interval}
+                                onChange={(value) =>
+                                  updateContentGenerationInterval(option.key, {
+                                    interval: Number(value) || option.fallbackInterval
+                                  })
+                                }
+                                className="!w-[132px]"
+                              />
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-3">
-                            {option.key === 'todos' && (
-                              <Radio.Group
-                                type="button"
-                                value={normalizeTodoApprovalMode(config.approval_mode)}
-                                onChange={(value) =>
-                                  updateContentGenerationInterval('todos', {
-                                    approval_mode: value as TodoApprovalMode
-                                  })
-                                }>
-                                <Radio value="review">Review</Radio>
-                                <Radio value="auto_add">Auto add</Radio>
-                              </Radio.Group>
-                            )}
-                            <Switch
-                              checked={config.enabled}
-                              onChange={(checked) => updateContentGenerationInterval(option.key, { enabled: checked })}
-                            />
-                            <InputNumber
-                              min={option.minInterval}
-                              precision={0}
-                              step={60}
-                              value={config.interval}
-                              onChange={(value) =>
-                                updateContentGenerationInterval(option.key, {
-                                  interval: Number(value) || option.fallbackInterval
-                                })
-                              }
-                              className="!w-[132px]"
+                          <div className="mt-2 flex items-center justify-between gap-3">
+                            <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                            <Select
+                              value={featureModelAssignments[assignmentKey] || ''}
+                              options={modelProfileOptions}
+                              onChange={(value) => updateFeatureModelAssignment(option.key, value as string)}
+                              className="!w-[360px]"
                             />
                           </div>
                         </div>
                       )
                     })}
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Daily report</div>
-                        <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                          Generate one summary report at this local time.
+                    <div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Daily report</div>
+                          <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                            Generate one summary report at this local time.
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <Switch
+                            checked={reportGenerationSettings.enabled}
+                            onChange={(checked) => updateContentGenerationReport({ enabled: checked })}
+                          />
+                          <Input
+                            type="time"
+                            value={reportGenerationSettings.time}
+                            onChange={(value) => updateContentGenerationReport({ time: normalizeReportTime(value) })}
+                            className="!w-[132px]"
+                          />
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <Switch
-                          checked={reportGenerationSettings.enabled}
-                          onChange={(checked) => updateContentGenerationReport({ enabled: checked })}
-                        />
-                        <Input
-                          type="time"
-                          value={reportGenerationSettings.time}
-                          onChange={(value) => updateContentGenerationReport({ time: normalizeReportTime(value) })}
-                          className="!w-[132px]"
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                        <Select
+                          value={featureModelAssignments[getFeatureModelAssignmentKey('report')] || ''}
+                          options={modelProfileOptions}
+                          onChange={(value) => updateFeatureModelAssignment('report', value as string)}
+                          className="!w-[360px]"
                         />
                       </div>
                     </div>
