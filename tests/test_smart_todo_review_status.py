@@ -76,6 +76,7 @@ class SmartTodoReviewStatusTest(unittest.TestCase):
         manager = smart_todo_module.SmartTodoManager()
         storage = Mock()
         storage.insert_todo.return_value = 123
+        storage.get_todos.return_value = []
 
         tasks = [
             {
@@ -102,6 +103,44 @@ class SmartTodoReviewStatusTest(unittest.TestCase):
             smart_todo_module.TODO_STATUS_REVIEW,
         )
         storage.upsert_todo_embedding.assert_called_once()
+
+    def test_existing_user_todos_are_passed_to_extraction(self):
+        manager = smart_todo_module.SmartTodoManager()
+        storage = Mock()
+        storage.get_todos.return_value = [
+            {
+                "id": 10,
+                "content": "Prepare the launch plan",
+                "status": 0,
+                "urgency": 2,
+                "reason": "Manually added by user",
+                "start_time": "2026-05-28 09:00:00",
+                "end_time": None,
+            },
+            {
+                "id": 11,
+                "content": "Unconfirmed generated suggestion",
+                "status": smart_todo_module.TODO_STATUS_REVIEW,
+                "urgency": 1,
+                "reason": "Generated from context",
+                "start_time": "2026-05-28 09:00:00",
+                "end_time": None,
+            },
+        ]
+        extractor = Mock(return_value=[])
+
+        with (
+            patch.object(manager, "_get_recent_activity_insights", return_value={}),
+            patch.object(manager, "_get_task_relevant_contexts", return_value=[]),
+            patch.object(manager, "_extract_tasks_from_contexts_enhanced", extractor),
+            patch.object(smart_todo_module, "get_storage", return_value=storage),
+        ):
+            result = manager.generate_todo_tasks(start_time=1, end_time=2)
+
+        self.assertIsNone(result)
+        historical_todos = extractor.call_args.args[4]
+        self.assertEqual([todo["id"] for todo in historical_todos], [10])
+        self.assertEqual(historical_todos[0]["status_label"], "pending")
 
 
 if __name__ == "__main__":

@@ -1185,6 +1185,7 @@ generation:
       1. **Potential Task Mining**: Carefully evaluate potential new tasks, judge which should be converted into actual todos
       2. **Context Activity Understanding**: Extract user behavior patterns and implicit task requirements from user's recent activity context
       3. **Time Association Processing**: Reasonably set task priority and deadline in combination with current time
+      4. **User-Declared Goal Tracking**: Treat pending historical tasks as user-written goals and keyword anchors. Use recent activity context to update their progress, identify concrete follow-up actions, or avoid generating unrelated tasks. Do not create duplicate tasks for an existing historical task unless the new task is a distinct next action with clear evidence.
 
       **Task Generation Rules**:
       1.**Scenarios Where Tasks Must Be Generated**:

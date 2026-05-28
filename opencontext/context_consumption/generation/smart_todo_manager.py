@@ -23,6 +23,7 @@ from opencontext.utils.json_parser import parse_json_from_response
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+TODO_STATUS_COMPLETED = 1
 TODO_STATUS_REVIEW = 2
 
 
@@ -65,8 +66,7 @@ class SmartTodoManager:
             # 2. Get regular context data
             contexts = self._get_task_relevant_contexts(start_time, end_time, activity_insights)
             # 3. Get historical todo completion status
-            # historical_todos = self._get_historical_todos()
-            historical_todos  = []
+            historical_todos = self._get_historical_todos()
             # 4. Synthesize all information to generate high-quality todos
             tasks = self._extract_tasks_from_contexts_enhanced(
                 contexts, start_time, end_time, activity_insights, historical_todos
@@ -174,7 +174,22 @@ class SmartTodoManager:
         try:
             start_time = datetime.datetime.now() - datetime.timedelta(days=days)
             todos = get_storage().get_todos(limit=limit, start_time=start_time)
-            return todos
+            return [
+                {
+                    "id": todo.get("id"),
+                    "content": todo.get("content"),
+                    "status": todo.get("status"),
+                    "status_label": (
+                        "completed" if todo.get("status") == TODO_STATUS_COMPLETED else "pending"
+                    ),
+                    "urgency": todo.get("urgency"),
+                    "reason": todo.get("reason"),
+                    "start_time": todo.get("start_time"),
+                    "end_time": todo.get("end_time"),
+                }
+                for todo in todos
+                if todo.get("status") != TODO_STATUS_REVIEW
+            ]
         except Exception as e:
             logger.exception(f"Failed to get historical todos: {e}")
             return []
