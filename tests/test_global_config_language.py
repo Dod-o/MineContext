@@ -25,7 +25,7 @@ class GlobalConfigLanguageTest(unittest.TestCase):
             encoding="utf-8",
         )
         (config_dir / "prompts_en.yaml").write_text(
-            "generation:\n  sample:\n    system: en system\n    user: en user\n",
+            "generation:\n  sample:\n    system: en system\n    user: en user\n  generation_report:\n    system: en report system\n    user: en report user\n",
             encoding="utf-8",
         )
 
@@ -88,6 +88,10 @@ class GlobalConfigLanguageTest(unittest.TestCase):
 
             self.assertEqual(config.get_language(), "en")
             self.assertEqual(get_prompt_group("generation.sample")["system"], "en system")
+            self.assertEqual(
+                get_prompt_group("generation.generation_report")["system"],
+                "en report system",
+            )
 
 
 if __name__ == "__main__":
