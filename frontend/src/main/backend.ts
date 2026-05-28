@@ -175,6 +175,55 @@ async function checkBackendHealth(options: HealthCheckOptions = {}) {
   }
 }
 
+function parseHealthCheckResult(result: unknown): any | null {
+  if (typeof result === 'string') {
+    try {
+      return JSON.parse(result)
+    } catch (error: any) {
+      logToBackendFile(`Failed to parse backend health response: ${error.message}`)
+      return null
+    }
+  }
+
+  return result && typeof result === 'object' ? result : null
+}
+
+function normalizePathForCompare(value: string): string {
+  const resolved = path.resolve(value)
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+function getExpectedContextPath(): string {
+  if (!app.isPackaged && is.dev) {
+    return path.resolve(getResourcesPath(), 'backend')
+  }
+
+  return path.resolve(app.getPath('userData'))
+}
+
+function backendUsesExpectedContextPath(healthCheckResult: unknown): boolean {
+  const parsed = parseHealthCheckResult(healthCheckResult)
+  const data = parsed?.data ?? parsed
+  const backendContextPath = data?.context_path
+
+  if (!backendContextPath || typeof backendContextPath !== 'string') {
+    logToBackendFile('Existing backend health response does not include context_path; not reusing it')
+    return false
+  }
+
+  const expectedContextPath = getExpectedContextPath()
+  const matches =
+    normalizePathForCompare(backendContextPath) === normalizePathForCompare(expectedContextPath)
+
+  if (!matches) {
+    logToBackendFile(
+      `Existing backend context path mismatch; expected ${expectedContextPath}, got ${backendContextPath}`
+    )
+  }
+
+  return matches
+}
+
 async function findRunningBackendPort(startPort: number = 1733, maxAttempts: number = 20) {
   for (let port = startPort; port < startPort + maxAttempts; port++) {
     const available = await isPortAvailable(port)
@@ -189,6 +238,9 @@ async function findRunningBackendPort(startPort: number = 1733, maxAttempts: num
         retryDelayMs: 0,
         requestTimeoutMs: 1200
       })
+      if (!backendUsesExpectedContextPath(healthCheckResult)) {
+        continue
+      }
       logToBackendFile(`Detected healthy backend on existing port ${port}`)
       return {
         port,

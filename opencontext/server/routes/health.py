@@ -7,6 +7,9 @@
 Health check routes
 """
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Depends
 
 from opencontext.server.middleware.auth import is_auth_enabled
@@ -30,6 +33,8 @@ async def api_health_check(opencontext: OpenContext = Depends(get_context_lab)):
             "status": "healthy",
             "service": "opencontext",
             "components": opencontext.check_components_health(),
+            "context_path": str(Path(os.getenv("CONTEXT_PATH", ".")).resolve()),
+            "pid": os.getpid(),
         }
         return convert_resp(data=health_data)
     except Exception as e:
