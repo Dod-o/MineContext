@@ -47,6 +47,9 @@ class GlobalVLMClient:
             with self._lock:
                 if not self._initialized:
                     self._vlm_client: Optional[LLMClient] = None
+                    self._vlm_clients: list[LLMClient] = []
+                    self._vlm_configs: list[Dict[str, Any]] = []
+                    self._active_client_index = 0
                     self._auto_initialized = False
                     GlobalVLMClient._initialized = True
 
@@ -67,6 +70,165 @@ class GlobalVLMClient:
             cls._instance = None
             cls._initialized = False
 
+    @staticmethod
+    def _normalize_vlm_config(config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Normalize saved settings/profile shapes into LLMClient config."""
+        if not isinstance(config, dict):
+            return None
+
+        api_key = config.get("api_key")
+        if api_key is None:
+            api_key = config.get("apiKey", "")
+
+        normalized = {
+            "base_url": config.get("base_url") or config.get("baseUrl") or "",
+            "api_key": api_key or "",
+            "model": config.get("model") or config.get("modelId") or "",
+            "provider": config.get("provider") or config.get("modelPlatform") or "openai",
+        }
+        if config.get("timeout") is not None:
+            normalized["timeout"] = config["timeout"]
+
+        if not normalized["base_url"] or not normalized["model"]:
+            return None
+        return normalized
+
+    @staticmethod
+    def _vlm_config_key(config: Dict[str, Any]) -> tuple:
+        return (
+            (config.get("provider") or "").lower(),
+            (config.get("base_url") or "").rstrip("/"),
+            config.get("model") or "",
+            config.get("api_key") or "",
+        )
+
+    def _get_vlm_configs(self) -> list[Dict[str, Any]]:
+        """Return primary VLM config followed by saved profile configs."""
+        config = get_config() or {}
+        if not isinstance(config, dict):
+            vlm_config = get_config("vlm_model")
+            config = {"vlm_model": vlm_config} if vlm_config else {}
+
+        candidates = [config.get("vlm_model")]
+        for profile in config.get("model_profiles", []) or []:
+            if isinstance(profile, dict):
+                candidates.append(profile.get("config") or profile)
+
+        configs = []
+        seen = set()
+        for candidate in candidates:
+            normalized = self._normalize_vlm_config(candidate)
+            if not normalized:
+                continue
+            key = self._vlm_config_key(normalized)
+            if key in seen:
+                continue
+            seen.add(key)
+            configs.append(normalized)
+        return configs
+
+    def _create_vlm_clients(self) -> tuple[list[LLMClient], list[Dict[str, Any]]]:
+        clients = []
+        configs = []
+        for vlm_config in self._get_vlm_configs():
+            try:
+                clients.append(LLMClient(llm_type=LLMType.CHAT, config=vlm_config))
+                configs.append(vlm_config)
+            except Exception as e:
+                provider = vlm_config.get("provider", "unknown")
+                model = vlm_config.get("model", "unknown")
+                logger.warning(f"Skipping VLM model candidate {provider}/{model}: {e}")
+        return clients, configs
+
+    def _set_vlm_clients(self, clients: list[LLMClient], configs: list[Dict[str, Any]]):
+        self._vlm_clients = clients
+        self._vlm_configs = configs
+        self._active_client_index = 0
+        self._vlm_client = clients[0] if clients else None
+
+    def _set_active_client(self, index: int):
+        self._active_client_index = index
+        self._vlm_client = self._vlm_clients[index]
+
+    def _ordered_clients(self):
+        if not self._vlm_clients:
+            raise RuntimeError("GlobalVLMClient is not initialized")
+        start = min(max(self._active_client_index, 0), len(self._vlm_clients) - 1)
+        for offset in range(len(self._vlm_clients)):
+            index = (start + offset) % len(self._vlm_clients)
+            yield index, self._vlm_clients[index]
+
+    def _describe_client(self, index: int, client: LLMClient) -> str:
+        if index < len(self._vlm_configs):
+            config = self._vlm_configs[index]
+            provider = config.get("provider", "unknown")
+            model = config.get("model", getattr(client, "model", "unknown"))
+            return f"{provider}/{model}"
+        return getattr(client, "model", "unknown")
+
+    def _log_client_failure(self, index: int, client: LLMClient, error: Exception):
+        logger.warning(
+            f"VLM model {self._describe_client(index, client)} failed; "
+            f"trying next configured model: {error}"
+        )
+
+    def _run_with_failover(self, method_name: str, *args, **kwargs):
+        last_error = None
+        for index, client in self._ordered_clients():
+            try:
+                result = getattr(client, method_name)(*args, **kwargs)
+                if index != self._active_client_index:
+                    logger.info(
+                        f"Switched active VLM model to {self._describe_client(index, client)}"
+                    )
+                self._set_active_client(index)
+                return result
+            except Exception as e:
+                last_error = e
+                self._log_client_failure(index, client, e)
+        raise last_error
+
+    async def _run_with_failover_async(self, method_name: str, *args, **kwargs):
+        last_error = None
+        for index, client in self._ordered_clients():
+            try:
+                result = await getattr(client, method_name)(*args, **kwargs)
+                if index != self._active_client_index:
+                    logger.info(
+                        f"Switched active VLM model to {self._describe_client(index, client)}"
+                    )
+                self._set_active_client(index)
+                return result
+            except Exception as e:
+                last_error = e
+                self._log_client_failure(index, client, e)
+        raise last_error
+
+    async def _stream_with_failover(self, method_name: str, *args, **kwargs):
+        last_error = None
+        for index, client in self._ordered_clients():
+            yielded = False
+            try:
+                async for chunk in getattr(client, method_name)(*args, **kwargs):
+                    yielded = True
+                    yield chunk
+                if index != self._active_client_index:
+                    logger.info(
+                        f"Switched active VLM model to {self._describe_client(index, client)}"
+                    )
+                self._set_active_client(index)
+                return
+            except Exception as e:
+                if yielded:
+                    logger.warning(
+                        f"VLM stream from {self._describe_client(index, client)} failed "
+                        f"after output started: {e}"
+                    )
+                    raise
+                last_error = e
+                self._log_client_failure(index, client, e)
+        raise last_error
+
     def _auto_initialize(self):
         """Auto-initialize VLM client"""
         if self._auto_initialized:
@@ -75,21 +237,21 @@ class GlobalVLMClient:
 
         self._tools_executor = ToolsExecutor()
         try:
-            vlm_config = get_config("vlm_model")
-            if not vlm_config:
-                logger.warning("No vlm config found in vlm_model")
+            clients, configs = self._create_vlm_clients()
+            if not clients:
+                logger.warning("No valid VLM config found")
                 self._auto_initialized = True
                 return
 
-            self._vlm_client = LLMClient(llm_type=LLMType.CHAT, config=vlm_config)
-            logger.info("GlobalVLMClient auto-initialized successfully")
+            self._set_vlm_clients(clients, configs)
+            logger.info(f"GlobalVLMClient auto-initialized with {len(clients)} model(s)")
             self._auto_initialized = True
         except Exception as e:
             logger.error(f"GlobalVLMClient auto-initialization failed: {e}")
             self._auto_initialized = True
 
     def is_initialized(self) -> bool:
-        return self._vlm_client is not None
+        return bool(self._vlm_clients)
 
     def reinitialize(self):
         """
@@ -97,14 +259,12 @@ class GlobalVLMClient:
         """
         with self._lock:
             try:
-                vlm_config = get_config("vlm_model")
-                if not vlm_config:
+                clients, configs = self._create_vlm_clients()
+                if not clients:
                     logger.error("No vlm config found during reinitialize")
                     raise ValueError("No vlm config found")
-                new_client = LLMClient(llm_type=LLMType.CHAT, config=vlm_config)
-                old_client = self._vlm_client
-                self._vlm_client = new_client
-                logger.info("GlobalVLMClient reinitialized successfully")
+                self._set_vlm_clients(clients, configs)
+                logger.info(f"GlobalVLMClient reinitialized with {len(clients)} model(s)")
 
             except Exception as e:
                 logger.error(f"Failed to reinitialize VLM client: {e}")
@@ -114,7 +274,7 @@ class GlobalVLMClient:
     def generate_with_messages(
         self, messages: list, enable_executor: bool = True, max_calls: int = 5, **kwargs
     ):
-        response = self._vlm_client.generate_with_messages(messages, **kwargs)
+        response = self._run_with_failover("generate_with_messages", messages, **kwargs)
         call_count = 0
         while enable_executor:
             call_count += 1
@@ -128,7 +288,7 @@ class GlobalVLMClient:
                         "content": f"System notice: Maximum tool call limit ({max_calls}) reached. Cannot execute more tool calls. Please answer the user's question directly without attempting more tool calls.",
                     }
                 )
-                response = self._vlm_client.generate_with_messages(messages, **kwargs)
+                response = self._run_with_failover("generate_with_messages", messages, **kwargs)
                 break
             message = response.choices[0].message
             if not message.tool_calls:
@@ -168,7 +328,7 @@ class GlobalVLMClient:
                         "tool_call_id": tool_id,
                     }
                 )
-            response = self._vlm_client.generate_with_messages(messages, **kwargs)
+            response = self._run_with_failover("generate_with_messages", messages, **kwargs)
 
         message = response.choices[0].message
         return message.content
@@ -176,7 +336,9 @@ class GlobalVLMClient:
     async def generate_with_messages_async(
         self, messages: list, enable_executor: bool = True, max_calls: int = 5, **kwargs
     ):
-        response = await self._vlm_client.generate_with_messages_async(messages, **kwargs)
+        response = await self._run_with_failover_async(
+            "generate_with_messages_async", messages, **kwargs
+        )
         call_count = 0
         while enable_executor:
             call_count += 1
@@ -188,7 +350,9 @@ class GlobalVLMClient:
                         "content": f"System notice: Maximum tool call limit ({max_calls}) reached. Cannot execute more tool calls. Please answer the user's question directly without attempting more tool calls.",
                     }
                 )
-                response = await self._vlm_client.generate_with_messages_async(messages, **kwargs)
+                response = await self._run_with_failover_async(
+                    "generate_with_messages_async", messages, **kwargs
+                )
                 break
             message = response.choices[0].message
             if not message.tool_calls:
@@ -226,7 +390,9 @@ class GlobalVLMClient:
                 )
 
             # Call LLM again
-            response = await self._vlm_client.generate_with_messages_async(messages, **kwargs)
+            response = await self._run_with_failover_async(
+                "generate_with_messages_async", messages, **kwargs
+            )
 
         message = response.choices[0].message
         return message.content
@@ -243,8 +409,8 @@ class GlobalVLMClient:
         Returns:
             Raw LLM response object, including possible tool_calls
         """
-        response = await self._vlm_client.generate_with_messages_async(
-            messages, tools=tools, **kwargs
+        response = await self._run_with_failover_async(
+            "generate_with_messages_async", messages, tools=tools, **kwargs
         )
         return response
 
@@ -252,8 +418,8 @@ class GlobalVLMClient:
         """
         Agent-specific streaming generation method
         """
-        async for chunk in self._vlm_client._openai_chat_completion_stream_async(
-            messages, tools=tools, **kwargs
+        async for chunk in self._stream_with_failover(
+            "_openai_chat_completion_stream_async", messages, tools=tools, **kwargs
         ):
             yield chunk
 
