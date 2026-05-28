@@ -50,6 +50,14 @@ class ApiFeedbackStaticTest(unittest.TestCase):
         self.assertIn("response.data.message", settings_page)
         self.assertIn("'Get started'", settings_page)
 
+    def test_model_update_reports_unavailable_model_validation_errors(self):
+        settings_route = SETTINGS_ROUTE.read_text(encoding="utf-8")
+
+        self.assertIn('message=f"VLM validation failed: {vlm_msg}"', settings_route)
+        self.assertIn('message=f"Embedding validation failed: {emb_msg}"', settings_route)
+        self.assertIn("timeout=15", settings_route)
+        self.assertIn("Failed to save settings", settings_route)
+
 
 if __name__ == "__main__":
     unittest.main()
