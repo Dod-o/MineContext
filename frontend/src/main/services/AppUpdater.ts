@@ -66,7 +66,8 @@ export default class AppUpdater {
       logger.error('Failed to check for update:', error as Error)
       return {
         currentVersion: app.getVersion(),
-        updateInfo: null
+        updateInfo: null,
+        error: error instanceof Error ? error.message : String(error)
       }
     }
   }

@@ -3,9 +3,10 @@
 
 import { FC, useMemo, useEffect, useState } from 'react'
 import { Form, Button, Select, Input, Typography, Spin, Message, Switch, Radio, InputNumber } from '@arco-design/web-react'
-import { IconFolder, IconRefresh, IconSave } from '@arco-design/web-react/icon'
+import { IconFolder, IconPoweroff, IconRefresh, IconSave } from '@arco-design/web-react/icon'
 import { find, get, isEmpty, pick } from 'lodash'
 import type { ThemeMode } from '@shared/theme'
+import { IpcChannel } from '@shared/IpcChannel'
 import {
   defaultAppRuntimeSettings,
   MAX_BACKEND_START_PORT,
@@ -246,6 +247,10 @@ const Settings: FC<SettingsProps> = (props) => {
   const [runtimeSettings, setRuntimeSettings] = useState<AppRuntimeSettings>(defaultAppRuntimeSettings)
   const [runtimeSettingsSaving, setRuntimeSettingsSaving] = useState(false)
   const [currentBackendPort, setCurrentBackendPort] = useState<number>()
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateDownloading, setUpdateDownloading] = useState(false)
+  const [updateDownloaded, setUpdateDownloaded] = useState(false)
+  const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string>()
   const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
   const [selectedProfileName, setSelectedProfileName] = useState<string>()
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
@@ -385,6 +390,41 @@ const Settings: FC<SettingsProps> = (props) => {
     })()
   })
 
+  useEffect(() => {
+    if (!window.electron?.ipcRenderer) {
+      return
+    }
+
+    const ipcRenderer = window.electron.ipcRenderer
+    const removeUpdateAvailableListener = ipcRenderer.on(IpcChannel.UpdateAvailable, (_event, info) => {
+      setAvailableUpdateVersion(info?.version)
+      setUpdateDownloaded(false)
+      setUpdateDownloading(true)
+    })
+    const removeUpdateNotAvailableListener = ipcRenderer.on(IpcChannel.UpdateNotAvailable, () => {
+      setAvailableUpdateVersion(undefined)
+      setUpdateDownloaded(false)
+      setUpdateDownloading(false)
+    })
+    const removeUpdateDownloadedListener = ipcRenderer.on(IpcChannel.UpdateDownloaded, (_event, info) => {
+      setAvailableUpdateVersion(info?.version)
+      setUpdateDownloaded(true)
+      setUpdateDownloading(false)
+      Message.success(`Update ${info?.version || ''} downloaded. Restart to install.`)
+    })
+    const removeUpdateErrorListener = ipcRenderer.on(IpcChannel.UpdateError, (_event, error) => {
+      setUpdateDownloading(false)
+      Message.error(get(error, 'message') || 'Failed to check for updates')
+    })
+
+    return () => {
+      removeUpdateAvailableListener()
+      removeUpdateNotAvailableListener()
+      removeUpdateDownloadedListener()
+      removeUpdateErrorListener()
+    }
+  }, [])
+
   const handleLaunchOnBootChange = useMemoizedFn(async (checked: boolean) => {
     setLaunchOnBootLoading(true)
     try {
@@ -407,6 +447,37 @@ const Settings: FC<SettingsProps> = (props) => {
     } finally {
       setThemeLoading(false)
     }
+  })
+
+  const handleCheckForUpdates = useMemoizedFn(async () => {
+    setUpdateChecking(true)
+    setUpdateDownloaded(false)
+    try {
+      const result = await window.api.checkForUpdate()
+      const nextUpdateVersion = result?.updateInfo?.version
+      if (result?.error) {
+        Message.error(result.error)
+        return
+      }
+
+      if (nextUpdateVersion) {
+        setAvailableUpdateVersion(nextUpdateVersion)
+        setUpdateDownloading(true)
+        Message.info(`Update ${nextUpdateVersion} found. Downloading...`)
+      } else {
+        setAvailableUpdateVersion(undefined)
+        setUpdateDownloading(false)
+        Message.success(`MineContext is up to date (${result?.currentVersion || 'current version'})`)
+      }
+    } catch (error: any) {
+      Message.error(get(error, 'message') || 'Failed to check for updates')
+    } finally {
+      setUpdateChecking(false)
+    }
+  })
+
+  const handleInstallUpdate = useMemoizedFn(() => {
+    window.api.quitAndInstall()
   })
 
   const handleSelectScreenshotDirectory = useMemoizedFn(async () => {
@@ -488,6 +559,33 @@ const Settings: FC<SettingsProps> = (props) => {
                     <Radio value="dark">Dark</Radio>
                   </Radio.Group>
                 </Spin>
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
+                <div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">App updates</div>
+                  <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                    {availableUpdateVersion
+                      ? updateDownloaded
+                        ? `Version ${availableUpdateVersion} is ready to install.`
+                        : `Version ${availableUpdateVersion} is downloading.`
+                      : 'Check for the latest MineContext release.'}
+                  </div>
+                </div>
+                {updateDownloaded ? (
+                  <Button type="primary" icon={<IconPoweroff />} onClick={handleInstallUpdate}>
+                    Restart
+                  </Button>
+                ) : (
+                  <Button
+                    icon={<IconRefresh />}
+                    loading={updateChecking || updateDownloading}
+                    disabled={updateDownloading}
+                    onClick={handleCheckForUpdates}>
+                    {updateDownloading ? 'Downloading' : 'Check'}
+                  </Button>
+                )}
               </div>
             )}
             {!init && (
