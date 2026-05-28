@@ -178,6 +178,7 @@ class ScreenshotProcessor(BaseContextProcessor):
         """Background processing loop for handling screenshots in input queue."""
         unprocessed_contexts = []
         last_process_time = int(time.time())
+        consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
                 # Wait for new items or timeout
@@ -211,7 +212,18 @@ class ScreenshotProcessor(BaseContextProcessor):
                     error_msg, processor_name=self.get_name(), context_count=len(unprocessed_contexts)
                 )
                 increment_recording_stat("failed", len(unprocessed_contexts))
+                consecutive_failures += 1
+                failed_count = len(unprocessed_contexts)
+                unprocessed_contexts.clear()
+                last_process_time = int(time.time())
+                backoff_seconds = min(60, 2 ** min(consecutive_failures, 5))
+                logger.warning(
+                    f"Dropped {failed_count} failed screenshots and backing off for {backoff_seconds}s "
+                    f"after {consecutive_failures} consecutive failures"
+                )
+                self._stop_event.wait(backoff_seconds)
                 continue
+            consecutive_failures = 0
             try:
                 duration_ms = int((time.time() - start_time) * 1000)
                 record_processing_metrics(
