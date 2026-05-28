@@ -21,6 +21,17 @@ class StorageSettingsStaticTest(unittest.TestCase):
         self.assertIn("backendStartPort", settings_page)
         self.assertIn("retainScreenshotImages", settings_page)
 
+    def test_screenshot_directory_and_backend_port_can_be_customized(self):
+        runtime_settings = RUNTIME_SETTINGS.read_text(encoding="utf-8")
+        settings_page = SETTINGS_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("DEFAULT_BACKEND_START_PORT = 1733", runtime_settings)
+        self.assertIn("normalizeBackendStartPort", runtime_settings)
+        self.assertIn("handleSelectScreenshotDirectory", settings_page)
+        self.assertIn("Browse", settings_page)
+        self.assertIn("backendStartPort", settings_page)
+        self.assertIn("Port changes apply after app restart.", settings_page)
+
 
 if __name__ == "__main__":
     unittest.main()
