@@ -73,10 +73,12 @@ class ScreenMonitorTask extends ScheduleNextTask {
       this.modelConfig = config
       const settings = this.getEffectiveSettings()
       this.updateInterval(settings.recordInterval * 1000)
+      logger.info(`ScreenMonitorTask record interval updated to ${settings.recordInterval}s`)
       if (this.status === 'running') {
         this.registerManualCaptureShortcut()
         this.startAdaptiveCaptureMonitor()
       }
+      return { success: true }
     })
     ipcMain.handle(IpcChannel.Task_Start, () => {
       logger.info('render notify ScreenMonitorTask start')
@@ -128,6 +130,8 @@ class ScreenMonitorTask extends ScheduleNextTask {
 
     logger.info('ScreenMonitorTask startTask', this.configCache)
     this.status = 'running'
+    const settings = this.getEffectiveSettings()
+    this.updateInterval(settings.recordInterval * 1000)
     this.registerManualCaptureShortcut()
     this.startAdaptiveCaptureMonitor()
     this.configCache?.start()

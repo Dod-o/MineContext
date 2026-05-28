@@ -27,6 +27,7 @@ import { IpcChannel } from '@shared/IpcChannel'
 import type { RecordingStats } from './components/recording-stats-card'
 import { CaptureSource } from '@interface/common/source'
 import { getModelInfo, validateModelSettingsAPI } from '@renderer/services/Settings'
+import { normalizeScreenSettings, type ScreenSettings } from '@renderer/store/setting'
 
 const logger = getLogger('ScreenMonitor')
 type ApiConnectionStatus = 'unknown' | 'checking' | 'connected' | 'error'
@@ -152,6 +153,40 @@ const ScreenMonitor: React.FC = () => {
   const [tempManualCaptureShortcut, setTempManualCaptureShortcut] = useState(manualCaptureShortcut)
   const [tempExcludedAppPatterns, setTempExcludedAppPatterns] = useState(excludedAppPatterns)
   const [tempAdaptiveCapture, setTempAdaptiveCapture] = useState(adaptiveCapture)
+  const screenSettingsRef = useRef<ScreenSettings>(
+    normalizeScreenSettings({
+      recordInterval,
+      recordingHours,
+      enableRecordingHours,
+      applyToDays,
+      manualCaptureShortcutEnabled,
+      manualCaptureShortcut,
+      excludedAppPatterns,
+      adaptiveCapture
+    })
+  )
+
+  useEffect(() => {
+    screenSettingsRef.current = normalizeScreenSettings({
+      recordInterval,
+      recordingHours,
+      enableRecordingHours,
+      applyToDays,
+      manualCaptureShortcutEnabled,
+      manualCaptureShortcut,
+      excludedAppPatterns,
+      adaptiveCapture
+    })
+  }, [
+    recordInterval,
+    recordingHours,
+    enableRecordingHours,
+    applyToDays,
+    manualCaptureShortcutEnabled,
+    manualCaptureShortcut,
+    excludedAppPatterns,
+    adaptiveCapture
+  ])
 
   // Refresh the application list and trigger a re-render
   const refreshSourcesRead = useMemoizedFn(async () => {
@@ -251,16 +286,7 @@ const ScreenMonitor: React.FC = () => {
       return
     }
 
-    await window.screenMonitorAPI.updateModelConfig({
-      recordInterval,
-      recordingHours,
-      enableRecordingHours,
-      applyToDays,
-      manualCaptureShortcutEnabled,
-      manualCaptureShortcut,
-      excludedAppPatterns,
-      adaptiveCapture
-    })
+    await window.screenMonitorAPI.updateModelConfig(screenSettingsRef.current)
     await window.screenMonitorAPI.startTask()
     // Start polling for new activities
     startActivityPolling()
@@ -497,15 +523,28 @@ const ScreenMonitor: React.FC = () => {
     setApplicationVisible(false)
   })
 
-  const handleSaveSettings = useMemoizedFn(() => {
-    setRecordInterval(tempRecordInterval)
-    setEnableRecordingHours(tempEnableRecordingHours)
-    setRecordingHours(tempRecordingHours as [string, string])
-    setApplyToDays(tempApplyToDays)
-    setManualCaptureShortcutEnabled(tempManualCaptureShortcutEnabled)
-    setManualCaptureShortcut(tempManualCaptureShortcut)
-    setExcludedAppPatterns(tempExcludedAppPatterns)
-    setAdaptiveCapture(tempAdaptiveCapture)
+  const handleSaveSettings = useMemoizedFn(async () => {
+    const nextSettings = normalizeScreenSettings({
+      recordInterval: tempRecordInterval,
+      enableRecordingHours: tempEnableRecordingHours,
+      recordingHours: tempRecordingHours,
+      applyToDays: tempApplyToDays,
+      manualCaptureShortcutEnabled: tempManualCaptureShortcutEnabled,
+      manualCaptureShortcut: tempManualCaptureShortcut,
+      excludedAppPatterns: tempExcludedAppPatterns,
+      adaptiveCapture: tempAdaptiveCapture
+    })
+
+    screenSettingsRef.current = nextSettings
+    setRecordInterval(nextSettings.recordInterval)
+    setEnableRecordingHours(nextSettings.enableRecordingHours)
+    setRecordingHours(nextSettings.recordingHours)
+    setApplyToDays(nextSettings.applyToDays)
+    setManualCaptureShortcutEnabled(nextSettings.manualCaptureShortcutEnabled)
+    setManualCaptureShortcut(nextSettings.manualCaptureShortcut)
+    setExcludedAppPatterns(nextSettings.excludedAppPatterns)
+    setAdaptiveCapture(nextSettings.adaptiveCapture)
+    await window.screenMonitorAPI.updateModelConfig(nextSettings)
     setSettingsVisible(false)
   })
 
@@ -625,7 +664,7 @@ const ScreenMonitor: React.FC = () => {
       windowList
     })
     await window.screenMonitorAPI.updateCurrentRecordApp([...screenList, ...windowList])
-    handleSaveSettings()
+    await handleSaveSettings()
     await appStore.set(refreshCaptureSourcesFromSettingsAtom)
   })
 
