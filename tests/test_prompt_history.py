@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from opencontext.utils.prompt_history import (
+    PROMPT_HISTORY_CATEGORY_DIRS,
     is_safe_history_filename,
     list_prompt_history_files,
 )
@@ -44,6 +45,12 @@ class PromptHistoryTest(unittest.TestCase):
         self.assertFalse(is_safe_history_filename("../secret.json"))
         self.assertFalse(is_safe_history_filename("..\\secret.json"))
         self.assertTrue(is_safe_history_filename("2026-05-28_12-00-00.json"))
+
+    def test_prompt_history_categories_cover_all_settings_buttons(self):
+        self.assertEqual(PROMPT_HISTORY_CATEGORY_DIRS["smart_tip_generation"], "tips")
+        self.assertEqual(PROMPT_HISTORY_CATEGORY_DIRS["todo_extraction"], "todo")
+        self.assertEqual(PROMPT_HISTORY_CATEGORY_DIRS["generation_report"], "report")
+        self.assertEqual(PROMPT_HISTORY_CATEGORY_DIRS["realtime_activity_monitor"], "activity")
 
 
 if __name__ == "__main__":
