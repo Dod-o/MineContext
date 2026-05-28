@@ -32,6 +32,14 @@ class StorageSettingsStaticTest(unittest.TestCase):
         self.assertIn("backendStartPort", settings_page)
         self.assertIn("Port changes apply after app restart.", settings_page)
 
+    def test_resource_storage_cleanup_supports_size_and_count_limits(self):
+        settings_route = SETTINGS_ROUTE.read_text(encoding="utf-8")
+
+        self.assertIn("max_file_count", settings_route)
+        self.assertIn("max_total_size_mb", settings_route)
+        self.assertIn("retention_days", settings_route)
+        self.assertIn("cleanup_image_storage", settings_route)
+
 
 if __name__ == "__main__":
     unittest.main()
