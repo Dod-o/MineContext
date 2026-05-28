@@ -105,6 +105,32 @@ function hasUserData(dirPath: string | null) {
   return false
 }
 
+function isUsableDataDir(dirPath: unknown, requireUserData = false) {
+  if (typeof dirPath !== 'string') return false
+  if (!fs.existsSync(dirPath) || !hasWritePermission(dirPath)) return false
+  return !requireUserData || hasUserData(dirPath)
+}
+
+function findReusableConfiguredDataDir(entries: unknown): string | null {
+  if (!Array.isArray(entries)) return null
+
+  for (const entry of entries) {
+    const dataPath = (entry as { dataPath?: unknown })?.dataPath
+    if (isUsableDataDir(dataPath, true)) {
+      return dataPath as string
+    }
+  }
+
+  for (const entry of entries) {
+    const dataPath = (entry as { dataPath?: unknown })?.dataPath
+    if (isUsableDataDir(dataPath)) {
+      return dataPath as string
+    }
+  }
+
+  return null
+}
+
 function updateWindowsDataDirRegistry(dataDir: string) {
   if (!isWin) return
 
@@ -192,19 +218,25 @@ function getAppDataPathFromConfig() {
       executablePath = path.join(process.env.PORTABLE_EXECUTABLE_DIR || '', 'vikingdb-portable.exe')
     }
 
-    let appDataPath = null
+    let appDataPath: string | null = null
     // 兼容旧版本
     if (config.appDataPath && typeof config.appDataPath === 'string') {
       appDataPath = config.appDataPath
       // 将旧版本数据迁移到新版本
       appDataPath && updateAppDataConfig(appDataPath)
     } else {
-      appDataPath = config.appDataPath.find(
+      const appDataEntries = Array.isArray(config.appDataPath) ? config.appDataPath : []
+      appDataPath = appDataEntries.find(
         (item: { executablePath: string }) => item.executablePath === executablePath
       )?.dataPath
+
+      if (!appDataPath) {
+        appDataPath = findReusableConfiguredDataDir(appDataEntries)
+        appDataPath && updateAppDataConfig(appDataPath)
+      }
     }
 
-    if (appDataPath && fs.existsSync(appDataPath) && hasWritePermission(appDataPath)) {
+    if (isUsableDataDir(appDataPath)) {
       return appDataPath
     }
 
