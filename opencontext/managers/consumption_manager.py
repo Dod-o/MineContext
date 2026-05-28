@@ -58,6 +58,8 @@ class ConsumptionManager:
 
         # Scheduled task configuration (load from config)
         self._scheduled_tasks_enabled = False
+        self._scheduled_tasks_paused = False
+        self._scheduler_pause_reasons = set()
         self._task_timers: Dict[str, threading.Timer] = {}
         self._task_intervals = {
             "activity": content_gen_config.get("activity", {}).get("interval", 900),
@@ -167,6 +169,49 @@ class ConsumptionManager:
         self._task_timers.clear()
 
         logger.info("Scheduled tasks stopped")
+
+    def pause_scheduled_tasks(self, reason: str = "external") -> Dict[str, Any]:
+        """Pause scheduled content generation until the matching reason is resumed."""
+        reason = reason or "external"
+
+        with self._config_lock:
+            already_paused = bool(self._scheduler_pause_reasons)
+            self._scheduler_pause_reasons.add(reason)
+
+            if not already_paused and self._scheduled_tasks_enabled:
+                self.stop_scheduled_tasks()
+                self._scheduled_tasks_paused = True
+                logger.info(f"Scheduled tasks paused: {reason}")
+            else:
+                logger.info(
+                    f"Scheduled tasks pause reason recorded: {reason}; "
+                    f"active reasons: {sorted(self._scheduler_pause_reasons)}"
+                )
+
+            return self.get_scheduled_tasks_status()
+
+    def resume_scheduled_tasks(self, reason: str = "external") -> Dict[str, Any]:
+        """Resume scheduled content generation when all pause reasons are cleared."""
+        reason = reason or "external"
+
+        with self._config_lock:
+            self._scheduler_pause_reasons.discard(reason)
+
+            if self._scheduler_pause_reasons:
+                logger.info(
+                    f"Scheduled tasks remain paused; active reasons: "
+                    f"{sorted(self._scheduler_pause_reasons)}"
+                )
+                return self.get_scheduled_tasks_status()
+
+            if self._scheduled_tasks_paused:
+                self._scheduled_tasks_paused = False
+                self.start_scheduled_tasks()
+                logger.info(f"Scheduled tasks resumed after clearing reason: {reason}")
+            else:
+                logger.info(f"Scheduled tasks resume ignored; no active pause for: {reason}")
+
+            return self.get_scheduled_tasks_status()
 
     def _calculate_seconds_until_daily_time(self, target_time_str: str) -> float:
         try:
@@ -377,6 +422,8 @@ class ConsumptionManager:
     def get_scheduled_tasks_status(self) -> Dict[str, Any]:
         return {
             "enabled": self._scheduled_tasks_enabled,
+            "paused": self._scheduled_tasks_paused or bool(self._scheduler_pause_reasons),
+            "pause_reasons": sorted(self._scheduler_pause_reasons),
             "daily_report_time": self._daily_report_time,
             "intervals": self._task_intervals.copy(),
             "active_timers": list(self._task_timers.keys()),

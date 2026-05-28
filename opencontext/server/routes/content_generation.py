@@ -66,6 +66,12 @@ class ContentGenerationConfig(BaseModel):
     report: Optional[ReportConfig] = None
 
 
+class SchedulerStateRequest(BaseModel):
+    """Scheduled content generation pause/resume request"""
+
+    reason: str = Field(default="external", min_length=1, max_length=64)
+
+
 @router.get("/api/content_generation/config")
 async def get_content_generation_config(
     opencontext: OpenContext = Depends(get_context_lab), _auth: str = auth_dependency
@@ -141,3 +147,39 @@ async def update_content_generation_config(
     except Exception as e:
         logger.exception(f"Error updating content generation config: {e}")
         return convert_resp(code=500, status=500, message=f"Failed to update config: {str(e)}")
+
+
+@router.post("/api/content_generation/scheduler/pause")
+async def pause_content_generation_scheduler(
+    request: SchedulerStateRequest,
+    opencontext: OpenContext = Depends(get_context_lab),
+    _auth: str = auth_dependency,
+):
+    """Pause scheduled content generation without changing user configuration."""
+    try:
+        if not hasattr(opencontext, "consumption_manager") or not opencontext.consumption_manager:
+            return convert_resp(code=500, status=500, message="Consumption manager not initialized")
+
+        status = opencontext.consumption_manager.pause_scheduled_tasks(request.reason)
+        return convert_resp(data=status, message="Content generation scheduler paused")
+    except Exception as e:
+        logger.exception(f"Error pausing content generation scheduler: {e}")
+        return convert_resp(code=500, status=500, message=f"Failed to pause scheduler: {str(e)}")
+
+
+@router.post("/api/content_generation/scheduler/resume")
+async def resume_content_generation_scheduler(
+    request: SchedulerStateRequest,
+    opencontext: OpenContext = Depends(get_context_lab),
+    _auth: str = auth_dependency,
+):
+    """Resume scheduled content generation after a matching pause reason is cleared."""
+    try:
+        if not hasattr(opencontext, "consumption_manager") or not opencontext.consumption_manager:
+            return convert_resp(code=500, status=500, message="Consumption manager not initialized")
+
+        status = opencontext.consumption_manager.resume_scheduled_tasks(request.reason)
+        return convert_resp(data=status, message="Content generation scheduler resumed")
+    except Exception as e:
+        logger.exception(f"Error resuming content generation scheduler: {e}")
+        return convert_resp(code=500, status=500, message=f"Failed to resume scheduler: {str(e)}")

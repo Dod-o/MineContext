@@ -5,7 +5,9 @@ import { POWER_MONITOR_KEY } from '@shared/constant/power-monitor'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
 import { getLogger } from '@shared/logger/main'
 import { monitor } from '@shared/logger/performance'
+import { getBackendPort } from '@main/backend'
 import { app, BrowserWindow, powerMonitor, powerSaveBlocker } from 'electron'
+import axios from 'axios'
 const logger = getLogger('Power')
 class Power {
   private blockerId?: number
@@ -25,6 +27,13 @@ class Power {
   public registerUnlockScreenCallback(callback: (...params: any[]) => void) {
     this.unlockScreenCallbacks.push(callback)
   }
+  private notifyContentGenerationScheduler(action: 'pause' | 'resume', reason: string) {
+    axios
+      .post(`http://127.0.0.1:${getBackendPort()}/api/content_generation/scheduler/${action}`, { reason })
+      .catch((error) => {
+        logger.warn(`Failed to ${action} content generation scheduler for ${reason}: ${error.message}`)
+      })
+  }
   run() {
     this.blockerId = powerSaveBlocker.start('prevent-app-suspension')
     app.on('window-all-closed', () => {
@@ -37,6 +46,7 @@ class Power {
     // Listen for macOS power events
     powerMonitor.on('suspend', () => {
       logger.info('💤 System is about to sleep')
+      this.notifyContentGenerationScheduler('pause', 'suspend')
       this.suspendCallbacks.forEach((callback) => callback())
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send(IpcServerPushChannel.PushPowerMonitor, { eventKey: POWER_MONITOR_KEY.Suspend })
@@ -45,6 +55,7 @@ class Power {
 
     powerMonitor.on('resume', () => {
       logger.info('🌞 System has woken up')
+      this.notifyContentGenerationScheduler('resume', 'suspend')
       this.resumeCallbacks.forEach((callback) => callback())
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send(IpcServerPushChannel.PushPowerMonitor, { eventKey: POWER_MONITOR_KEY.Resume })
@@ -53,6 +64,7 @@ class Power {
 
     powerMonitor.on('lock-screen', () => {
       logger.info('🔒 Screen is locked')
+      this.notifyContentGenerationScheduler('pause', 'lock-screen')
       this.lockScreenCallbacks.forEach((callback) => callback())
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send(IpcServerPushChannel.PushPowerMonitor, { eventKey: POWER_MONITOR_KEY.LockScreen })
@@ -61,6 +73,7 @@ class Power {
 
     powerMonitor.on('unlock-screen', () => {
       logger.info('🔓 Screen is unlocked')
+      this.notifyContentGenerationScheduler('resume', 'lock-screen')
       this.unlockScreenCallbacks.forEach((callback) => callback())
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send(IpcServerPushChannel.PushPowerMonitor, { eventKey: POWER_MONITOR_KEY.UnlockScreen })
