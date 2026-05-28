@@ -77,6 +77,14 @@ class ApiFeedbackStaticTest(unittest.TestCase):
         self.assertIn("Model API is unavailable. Check Settings before recording.", page)
         self.assertIn("await window.screenMonitorAPI.startTask()", page)
 
+    def test_prompt_history_detail_route_rejects_unsafe_filenames(self):
+        settings_route = SETTINGS_ROUTE.read_text(encoding="utf-8")
+
+        self.assertIn("get_prompts_history_detail", settings_route)
+        self.assertIn("is_safe_history_filename(filename)", settings_route)
+        self.assertIn('message="Invalid filename"', settings_route)
+        self.assertIn('message="History file not found"', settings_route)
+
 
 if __name__ == "__main__":
     unittest.main()
