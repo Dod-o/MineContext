@@ -87,6 +87,19 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertEqual(FakeOpenAI.last_base_url, "https://ark.cn-beijing.volces.com/api/v3")
 
+    def test_bare_openai_compatible_base_url_adds_v1(self):
+        self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://api.example.com",
+                "api_key": "test-key",
+                "model": "custom-chat",
+                "provider": "custom",
+            },
+        )
+
+        self.assertEqual(FakeOpenAI.last_base_url, "https://api.example.com/v1")
+
 
 if __name__ == "__main__":
     unittest.main()

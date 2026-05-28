@@ -9,6 +9,7 @@ OpenContext module: llm_client
 
 from enum import Enum
 from typing import Any, Dict, List
+from urllib.parse import urlsplit, urlunsplit
 
 from openai import APIError, AsyncOpenAI, OpenAI
 from volcenginesdkarkruntime import Ark
@@ -28,7 +29,13 @@ def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
     }
     for suffix in endpoint_suffixes.get(llm_type, ()):
         if normalized.endswith(suffix):
-            return normalized[: -len(suffix)]
+            normalized = normalized[: -len(suffix)]
+            break
+
+    parsed = urlsplit(normalized)
+    if parsed.scheme and parsed.netloc and parsed.path in ("", "/"):
+        return urlunsplit((parsed.scheme, parsed.netloc, "/v1", parsed.query, parsed.fragment))
+
     return normalized
 
 
