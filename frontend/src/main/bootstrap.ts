@@ -8,6 +8,8 @@ import path from 'path'
 import { initAppDataDir } from './utils/init'
 import { mainLog } from '@shared/logger/main'
 
+app.setName('MineContext')
+
 // Only execute initialization after packaging
 if (app.isPackaged) {
   initAppDataDir()

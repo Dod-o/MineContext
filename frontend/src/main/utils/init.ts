@@ -7,13 +7,23 @@ import path from 'node:path'
 
 import { isLinux, isPortable, isWin } from '@main/constant'
 import { app } from 'electron'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 
 // Please don't import any other modules which is not node/electron built-in modules
 
-function hasWritePermission(path: string) {
+const APP_NAME = 'MineContext'
+const WINDOWS_REGISTRY_KEY = 'HKCU\\Software\\MineContext'
+const USER_DATA_MARKERS = [
+  path.join('persist', 'sqlite', 'app.db'),
+  path.join('persist', 'chromadb'),
+  'Data',
+  'screenshots',
+  'documents'
+]
+
+function hasWritePermission(dirPath: string) {
   try {
-    fs.accessSync(path, fs.constants.W_OK)
+    fs.accessSync(dirPath, fs.constants.W_OK)
     return true
   } catch (error) {
     return false
@@ -29,7 +39,7 @@ function getDataDirFromRegistry() {
 
   try {
     // Read data directory from Windows Registry with timeout protection
-    const result = execSync('reg query "HKCU\\Software\\MineContext" /v DataDirectory', {
+    const result = execSync(`reg query "${WINDOWS_REGISTRY_KEY}" /v DataDirectory`, {
       encoding: 'utf8',
       timeout: 3000, // 3 second timeout to prevent hanging
       windowsHide: true
@@ -41,7 +51,7 @@ function getDataDirFromRegistry() {
     if (match && match[1]) {
       const dataDir = match[1].trim()
       if (fs.existsSync(dataDir) && hasWritePermission(dataDir)) {
-        return dataDir
+        return recoverWindowsLegacyDataDir(dataDir)
       }
     }
   } catch (error) {
@@ -50,6 +60,78 @@ function getDataDirFromRegistry() {
   }
 
   return null
+}
+
+function getWindowsElectronDefaultDataDir() {
+  if (!isWin) return null
+
+  const appDataDir = process.env.APPDATA || app.getPath('appData')
+  return appDataDir ? path.join(appDataDir, APP_NAME) : null
+}
+
+function getWindowsInstallerDefaultDataDir() {
+  if (!isWin) return null
+
+  const localAppDataDir = process.env.LOCALAPPDATA
+  return localAppDataDir ? path.join(localAppDataDir, APP_NAME) : null
+}
+
+function isSamePath(left: string | null, right: string | null) {
+  if (!left || !right) return false
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase()
+}
+
+function hasUserData(dirPath: string | null) {
+  if (!dirPath || !fs.existsSync(dirPath)) return false
+
+  for (const marker of USER_DATA_MARKERS) {
+    const markerPath = path.join(dirPath, marker)
+    try {
+      if (!fs.existsSync(markerPath)) continue
+
+      const stats = fs.statSync(markerPath)
+      if (stats.isFile() && stats.size > 0) {
+        return true
+      }
+
+      if (stats.isDirectory() && fs.readdirSync(markerPath).length > 0) {
+        return true
+      }
+    } catch (error) {
+      // Ignore unreadable markers and keep checking other data locations.
+    }
+  }
+
+  return false
+}
+
+function updateWindowsDataDirRegistry(dataDir: string) {
+  if (!isWin) return
+
+  try {
+    execFileSync('reg', ['add', WINDOWS_REGISTRY_KEY, '/v', 'DataDirectory', '/t', 'REG_SZ', '/d', dataDir, '/f'], {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsHide: true
+    })
+  } catch (error) {
+    console.warn('Failed to update data directory registry:', error)
+  }
+}
+
+function recoverWindowsLegacyDataDir(registryDataDir: string) {
+  if (!isWin || isPortable) return registryDataDir
+
+  const legacyDataDir = getWindowsElectronDefaultDataDir()
+  const installerDefaultDataDir = getWindowsInstallerDefaultDataDir()
+
+  if (!legacyDataDir || !installerDefaultDataDir) return registryDataDir
+  if (isSamePath(registryDataDir, legacyDataDir)) return registryDataDir
+  if (!isSamePath(registryDataDir, installerDefaultDataDir)) return registryDataDir
+  if (!hasUserData(legacyDataDir) || !hasWritePermission(legacyDataDir)) return registryDataDir
+
+  updateWindowsDataDirRegistry(legacyDataDir)
+  return legacyDataDir
 }
 
 export function initAppDataDir() {
@@ -74,9 +156,15 @@ export function initAppDataDir() {
       return
     }
 
-    // If no registry setting, use the default AppData location
-    // (e.g., %LOCALAPPDATA%\MineContext)
-    // This is the correct fallback behavior
+    const legacyDataDir = getWindowsElectronDefaultDataDir()
+    if (hasUserData(legacyDataDir) && legacyDataDir && hasWritePermission(legacyDataDir)) {
+      updateWindowsDataDirRegistry(legacyDataDir)
+      app.setPath('userData', legacyDataDir)
+      return
+    }
+
+    // If no registry setting exists, keep Electron's default userData location
+    // (e.g. %APPDATA%\MineContext on Windows).
   }
 }
 
