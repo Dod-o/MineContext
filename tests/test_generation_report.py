@@ -16,7 +16,11 @@ fake_debug_helper = types.ModuleType("opencontext.context_consumption.generation
 
 
 class _FakeDebugHelper:
-    pass
+    calls = []
+
+    @classmethod
+    def save_generation_debug(cls, **kwargs):
+        cls.calls.append(kwargs)
 
 
 fake_debug_helper.DebugHelper = _FakeDebugHelper
@@ -63,6 +67,26 @@ class _EmptyReportStorage:
 
     def get_activities(self, *args, **kwargs):
         return []
+
+
+class _TimelineReportStorage(_EmptyReportStorage):
+    def get_activities(self, *args, **kwargs):
+        return [
+            {
+                "id": 2,
+                "title": "Write: docs [draft]",
+                "content": "",
+                "start_time": datetime.datetime(2026, 5, 19, 10, 0, 0),
+                "end_time": datetime.datetime(2026, 5, 19, 10, 45, 0),
+            },
+            {
+                "id": 1,
+                "title": "Plan work",
+                "content": "",
+                "start_time": "2026-05-19 09:00:00",
+                "end_time": "2026-05-19 09:30:00",
+            },
+        ]
 
 
 class ReportGeneratorTest(unittest.TestCase):
@@ -120,6 +144,66 @@ class ReportGeneratorTest(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(calls, [])
+
+    def test_activity_timeline_section_uses_sorted_activity_records(self):
+        generator = ReportGenerator.__new__(ReportGenerator)
+        start_time = int(datetime.datetime(2026, 5, 19, 0, 0, 0).timestamp())
+        end_time = int(datetime.datetime(2026, 5, 20, 0, 0, 0).timestamp())
+        original_get_storage = generation_report_module.get_storage
+
+        try:
+            generation_report_module.get_storage = lambda: _TimelineReportStorage()
+
+            section = generator._build_activity_timeline_section(start_time, end_time)
+        finally:
+            generation_report_module.get_storage = original_get_storage
+
+        self.assertTrue(section.startswith("## Activity Timeline"))
+        self.assertIn("```mermaid", section)
+        self.assertIn("timeline", section)
+        self.assertIn("title Activity Timeline - 2026-05-19", section)
+        self.assertIn("09:00-09:30 : Plan work", section)
+        self.assertIn("10:00-10:45 : Write - docs (draft)", section)
+        self.assertLess(section.index("09:00-09:30"), section.index("10:00-10:45"))
+
+    def test_generate_report_inserts_activity_timeline_after_title(self):
+        class _TimelineReportGenerator(ReportGenerator):
+            async def _process_chunks_concurrently(self, start_time, end_time):
+                return [
+                    {
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "summary": "Hourly activity summary",
+                    }
+                ]
+
+        async def fake_generate_with_messages_async(_messages):
+            return "# Activity Report\n\n## Overview\nReport body"
+
+        generator = _TimelineReportGenerator.__new__(_TimelineReportGenerator)
+        start_time = int(datetime.datetime(2026, 5, 19, 0, 0, 0).timestamp())
+        end_time = int(datetime.datetime(2026, 5, 20, 0, 0, 0).timestamp())
+        original_get_storage = generation_report_module.get_storage
+        original_get_prompt_group = generation_report_module.get_prompt_group
+        original_generate = generation_report_module.generate_with_messages_async
+
+        try:
+            generation_report_module.get_storage = lambda: _TimelineReportStorage()
+            generation_report_module.get_prompt_group = lambda _name: {
+                "system": "",
+                "user": "{start_time_str} {end_time_str} {hourly_summaries}",
+            }
+            generation_report_module.generate_with_messages_async = fake_generate_with_messages_async
+
+            result = asyncio.run(generator._generate_report_with_llm(start_time, end_time))
+        finally:
+            generation_report_module.get_storage = original_get_storage
+            generation_report_module.get_prompt_group = original_get_prompt_group
+            generation_report_module.generate_with_messages_async = original_generate
+
+        self.assertTrue(result.startswith("# Activity Report\n\n## Activity Timeline"))
+        self.assertIn("```mermaid", result)
+        self.assertLess(result.index("## Activity Timeline"), result.index("## Overview"))
 
 
 if __name__ == "__main__":

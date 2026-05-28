@@ -9,6 +9,7 @@ OpenContext module: generation_report
 
 import datetime
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from opencontext.config.global_config import get_prompt_group
@@ -23,6 +24,7 @@ from opencontext.utils.logging_utils import get_logger
 logger = get_logger(__name__)
 TODO_STATUS_REVIEW = 2
 NO_ACTIVITY_REPORT = "No activity data available for the specified time range."
+MAX_TIMELINE_ACTIVITIES = 100
 
 
 class ReportGenerator:
@@ -255,6 +257,10 @@ class ReportGenerator:
             logger.error("Failed to generate report.")
             return None
 
+        timeline_section = self._build_activity_timeline_section(start_time, end_time)
+        if timeline_section:
+            report = self._insert_activity_timeline_section(report, timeline_section)
+
         # Save debug information (sync call within async function)
         DebugHelper.save_generation_debug(
             task_type="report",
@@ -269,6 +275,135 @@ class ReportGenerator:
         )
 
         return report
+
+    def _build_activity_timeline_section(self, start_time: int, end_time: int) -> str:
+        """Build a deterministic Mermaid timeline from stored activity records."""
+        start_datetime = datetime.datetime.fromtimestamp(start_time) if start_time else None
+        end_datetime = datetime.datetime.fromtimestamp(end_time) if end_time else None
+
+        try:
+            activities = get_storage().get_activities(
+                start_time=start_datetime,
+                end_time=end_datetime,
+                limit=MAX_TIMELINE_ACTIVITIES,
+            )
+        except Exception as e:
+            logger.exception(f"Failed to load activities for timeline: {e}")
+            return ""
+
+        timeline_items = []
+        for activity in activities:
+            item = self._format_timeline_activity(activity)
+            if item:
+                timeline_items.append(item)
+
+        if not timeline_items:
+            return ""
+
+        timeline_items.sort(key=lambda item: (item["start_time"] or item["end_time"], item["id"]))
+        title = self._sanitize_mermaid_text(
+            f"Activity Timeline - {self._format_timeline_title_date(start_datetime, end_datetime)}"
+        )
+        lines = [
+            "## Activity Timeline",
+            "",
+            "```mermaid",
+            "timeline",
+            f"    title {title}",
+        ]
+        for item in timeline_items:
+            lines.append(f"    {item['time_range']} : {item['label']}")
+        lines.append("```")
+        return "\n".join(lines)
+
+    def _format_timeline_activity(self, activity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        start_dt = self._coerce_datetime(activity.get("start_time"))
+        end_dt = self._coerce_datetime(activity.get("end_time"))
+        if not start_dt and not end_dt:
+            return None
+        if start_dt and end_dt and end_dt < start_dt:
+            end_dt = start_dt
+
+        label = self._sanitize_mermaid_text(activity.get("title") or activity.get("content") or "Activity")
+        if not label:
+            return None
+
+        return {
+            "id": activity.get("id") or 0,
+            "start_time": start_dt,
+            "end_time": end_dt,
+            "time_range": self._format_timeline_time_range(start_dt, end_dt),
+            "label": label,
+        }
+
+    def _coerce_datetime(self, value: Any) -> Optional[datetime.datetime]:
+        if isinstance(value, datetime.datetime):
+            return self._normalize_datetime(value)
+        if isinstance(value, (int, float)):
+            return datetime.datetime.fromtimestamp(value)
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+            normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+            try:
+                return self._normalize_datetime(datetime.datetime.fromisoformat(normalized))
+            except ValueError:
+                pass
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                try:
+                    return datetime.datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+        return None
+
+    def _normalize_datetime(self, value: datetime.datetime) -> datetime.datetime:
+        if value.tzinfo:
+            return value.astimezone().replace(tzinfo=None)
+        return value
+
+    def _format_timeline_title_date(
+        self, start_datetime: Optional[datetime.datetime], end_datetime: Optional[datetime.datetime]
+    ) -> str:
+        if start_datetime and end_datetime and start_datetime.date() != end_datetime.date():
+            return f"{start_datetime.strftime('%Y-%m-%d')} to {end_datetime.strftime('%Y-%m-%d')}"
+        if start_datetime:
+            return start_datetime.strftime("%Y-%m-%d")
+        if end_datetime:
+            return end_datetime.strftime("%Y-%m-%d")
+        return "Selected range"
+
+    def _format_timeline_time_range(
+        self, start_dt: Optional[datetime.datetime], end_dt: Optional[datetime.datetime]
+    ) -> str:
+        primary_dt = start_dt or end_dt
+        if not primary_dt:
+            return "Unknown time"
+        if not end_dt or end_dt == primary_dt:
+            return primary_dt.strftime("%H:%M")
+        if primary_dt.date() == end_dt.date():
+            return f"{primary_dt.strftime('%H:%M')}-{end_dt.strftime('%H:%M')}"
+        return f"{primary_dt.strftime('%m-%d %H:%M')}-{end_dt.strftime('%m-%d %H:%M')}"
+
+    def _sanitize_mermaid_text(self, value: Any, max_length: int = 80) -> str:
+        text = re.sub(r"\s+", " ", str(value or "").strip())
+        text = text.replace(":", " -")
+        text = text.replace("`", "'")
+        text = text.replace("|", "-")
+        text = text.replace("{", "(").replace("}", ")")
+        text = text.replace("[", "(").replace("]", ")")
+        if len(text) > max_length:
+            text = text[: max_length - 3].rstrip() + "..."
+        return text
+
+    def _insert_activity_timeline_section(self, report: str, timeline_section: str) -> str:
+        if "## Activity Timeline" in report or re.search(r"```mermaid\s+timeline", report, re.IGNORECASE):
+            return report
+
+        lines = report.splitlines()
+        if lines and lines[0].startswith("# "):
+            return "\n".join([lines[0], "", timeline_section, "", *lines[1:]]).strip()
+        return f"{timeline_section}\n\n{report}".strip()
 
     def _format_timestamp(self, timestamp: int) -> str:
         """

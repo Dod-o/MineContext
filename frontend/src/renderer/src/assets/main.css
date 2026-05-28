@@ -5,6 +5,7 @@
 
 @import 'tailwindcss';
 @import './base.css';
+@source "../../../../node_modules/streamdown/dist/index.js";
 
 /* 使用 CSS 层级来控制 Tailwind 样式优先级 */
 /* @import "tailwindcss" layer(tailwind); */

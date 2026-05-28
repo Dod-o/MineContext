@@ -6,7 +6,7 @@ import { Button, Input, Typography, Tag } from '@arco-design/web-react'
 import { IconStop } from '@arco-design/web-react/icon'
 import { useChatStream } from '@renderer/hooks/use-chat-stream'
 import { ChatContext } from '@renderer/services/ChatStreamService'
-import MarkdownIt from 'markdown-it'
+import { Streamdown } from 'streamdown'
 import chatEditIcon from '@renderer/assets/icons/chat-edit.svg'
 import chatSendIcon from '@renderer/assets/icons/chat-send.svg'
 import { useMemoizedFn, useRequest } from 'ahooks'
@@ -19,14 +19,6 @@ const { Text } = Typography
 const { TextArea } = Input
 const logger = getLogger('AIAssistant')
 
-// Initialize markdown parser
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  breaks: true
-})
-
 interface AIAssistantProps {
   visible: boolean
   onClose: () => void
@@ -35,23 +27,17 @@ interface AIAssistantProps {
 }
 
 // Markdown rendering component
-export const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
-  const htmlContent = useMemo(() => {
-    return md.render(content)
-  }, [content])
-
-  return (
-    <div
-      className="markdown-content select-text"
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
-      style={{
-        fontSize: 14,
-        lineHeight: 1.6,
-        wordBreak: 'break-word'
-      }}
-    />
-  )
-}
+export const MarkdownContent: React.FC<{ content: string }> = ({ content }) => (
+  <div
+    className="markdown-content select-text"
+    style={{
+      fontSize: 14,
+      lineHeight: 1.6,
+      wordBreak: 'break-word'
+    }}>
+    <Streamdown>{content}</Streamdown>
+  </div>
+)
 
 const AIAssistant: FC<AIAssistantProps> = (props) => {
   const { visible, onClose, pageName, initConversationId } = props
