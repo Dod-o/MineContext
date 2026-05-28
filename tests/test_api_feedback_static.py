@@ -41,6 +41,15 @@ class ApiFeedbackStaticTest(unittest.TestCase):
         self.assertIn("onClick={onCheckApiConnection}", header)
         self.assertIn("apiStatusConfig.label", header)
 
+    def test_get_started_surfaces_validation_and_save_errors(self):
+        settings_page = SETTINGS_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("const getValidationMessage", settings_page)
+        self.assertIn("Message.error(getValidationMessage(error))", settings_page)
+        self.assertIn("onError(e: Error)", settings_page)
+        self.assertIn("response.data.message", settings_page)
+        self.assertIn("'Get started'", settings_page)
+
 
 if __name__ == "__main__":
     unittest.main()
