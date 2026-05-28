@@ -92,6 +92,7 @@ processing:
     normalize_hdr_screenshots: true # Correct washed-out HDR captures before VLM processing
     enabled_delete: true
     max_raw_properties: 5
+    max_cached_contexts_per_type: 50 # Bound in-memory merge cache during long recordings
     image_retention:
       enabled: true
       retention_days: 15 # Delete recognized screenshots older than this many days

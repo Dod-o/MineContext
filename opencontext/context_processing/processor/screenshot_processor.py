@@ -67,6 +67,7 @@ class ScreenshotProcessor(BaseContextProcessor):
         self._batch_size = self.config.get("batch_size", 10)
         self._batch_timeout = self.config.get("batch_timeout", 20)  # seconds
         self._max_raw_properties = self.config.get("max_raw_properties", 5)
+        self._max_cached_contexts_per_type = self.config.get("max_cached_contexts_per_type", 50)
         self._max_image_size = self.config.get("max_image_size", 0)
         self._resize_quality = self.config.get("resize_quality", 95)
         self._normalize_hdr_screenshots = self.config.get("normalize_hdr_screenshots", True)
@@ -86,6 +87,32 @@ class ScreenshotProcessor(BaseContextProcessor):
             {}
         )
         self._current_screenshot = deque(maxlen=self._batch_size * 2)
+
+    def _trim_raw_properties(self, raw_properties: List[RawContextProperties]) -> List[RawContextProperties]:
+        max_raw_properties = max(0, int(self._max_raw_properties or 0))
+        if max_raw_properties == 0:
+            return []
+        return list(raw_properties)[-max_raw_properties:]
+
+    def _trim_context_memory(self, context: ProcessedContext) -> ProcessedContext:
+        context.properties.raw_properties = self._trim_raw_properties(
+            context.properties.raw_properties
+        )
+        return context
+
+    def _trim_processed_cache(
+        self, context_cache: Dict[str, ProcessedContext]
+    ) -> Dict[str, ProcessedContext]:
+        max_cached_contexts = max(1, int(self._max_cached_contexts_per_type or 1))
+        if len(context_cache) <= max_cached_contexts:
+            return context_cache
+
+        def sort_key(item):
+            context = item[1]
+            return context.properties.update_time or context.properties.create_time
+
+        kept_items = sorted(context_cache.items(), key=sort_key)[-max_cached_contexts:]
+        return dict(kept_items)
 
     def shutdown(self, graceful: bool = False):
         """Gracefully shut down background processing tasks."""
@@ -393,7 +420,9 @@ class ScreenshotProcessor(BaseContextProcessor):
             if result:
                 context_type = result.get("context_type")
                 all_newly_created.extend(result.get("processed_contexts", []))
-                self._processed_cache[context_type] = result.get("new_ctxs", {})
+                self._processed_cache[context_type] = self._trim_processed_cache(
+                    result.get("new_ctxs", {})
+                )
                 for item_id in result.get("need_to_del_ids", []):
                     get_storage().delete_processed_context(item_id, context_type)
         return all_newly_created
@@ -435,6 +464,7 @@ class ScreenshotProcessor(BaseContextProcessor):
         new_ctxs = {}
         entity_refresh_items = []
         for result in response_data.get("items", []):
+            final_context = None
             if not isinstance(result, dict):
                 logger.warning(f"Skipping invalid merge item from LLM response: {result}")
                 continue
@@ -466,7 +496,7 @@ class ScreenshotProcessor(BaseContextProcessor):
 
                 merged_ctx = ProcessedContext(
                     properties=ContextProperties(
-                        raw_properties=all_raw_props,
+                        raw_properties=self._trim_raw_properties(all_raw_props),
                         create_time=min_create_time,
                         update_time=now,
                         event_time=event_time,
@@ -502,6 +532,9 @@ class ScreenshotProcessor(BaseContextProcessor):
                 if merged_ids[0] in self._processed_cache.get(context_type.value, {}):
                     continue
                 final_context = all_items_map[merged_ids[0]]
+            if final_context is None:
+                continue
+            final_context = self._trim_context_memory(final_context)
             new_ctxs[final_context.id] = final_context
             entity_refresh_items.append(final_context)
 

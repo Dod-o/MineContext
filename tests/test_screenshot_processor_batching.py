@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import types
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -66,6 +67,14 @@ screenshot_processor_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(screenshot_processor_module)
 ScreenshotProcessor = screenshot_processor_module.ScreenshotProcessor
+ContentFormat = screenshot_processor_module.ContentFormat
+ContextProperties = screenshot_processor_module.ContextProperties
+ContextSource = screenshot_processor_module.ContextSource
+ContextType = screenshot_processor_module.ContextType
+ExtractedData = screenshot_processor_module.ExtractedData
+ProcessedContext = screenshot_processor_module.ProcessedContext
+RawContextProperties = screenshot_processor_module.RawContextProperties
+Vectorize = screenshot_processor_module.Vectorize
 
 
 class ScreenshotProcessorBatchingTest(unittest.TestCase):
@@ -73,7 +82,34 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
         processor = ScreenshotProcessor.__new__(ScreenshotProcessor)
         processor._batch_size = 3
         processor._batch_timeout = 10
+        processor._max_raw_properties = 2
+        processor._max_cached_contexts_per_type = 2
         return processor
+
+    def _raw_context(self, index: int):
+        return RawContextProperties(
+            source=ContextSource.SCREENSHOT,
+            content_format=ContentFormat.IMAGE,
+            content_path=f"screenshot-{index}.png",
+            create_time=datetime(2026, 1, 1) + timedelta(seconds=index),
+        )
+
+    def _processed_context(self, index: int):
+        event_time = datetime(2026, 1, 1) + timedelta(seconds=index)
+        return ProcessedContext(
+            properties=ContextProperties(
+                raw_properties=[self._raw_context(index)],
+                create_time=event_time,
+                update_time=event_time,
+                event_time=event_time,
+            ),
+            extracted_data=ExtractedData(
+                title=f"context {index}",
+                summary="summary",
+                context_type=ContextType.ACTIVITY_CONTEXT,
+            ),
+            vectorize=Vectorize(content_format=ContentFormat.TEXT, text="summary"),
+        )
 
     def test_batch_flushes_at_size_limit(self):
         processor = self._build_processor()
@@ -89,6 +125,27 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
         processor = self._build_processor()
 
         self.assertTrue(processor._should_process_batch(1, 100.0, 110.0))
+
+    def test_trim_raw_properties_keeps_recent_entries(self):
+        processor = self._build_processor()
+        raw_contexts = [self._raw_context(index) for index in range(4)]
+
+        trimmed = processor._trim_raw_properties(raw_contexts)
+
+        self.assertEqual([item.content_path for item in trimmed], ["screenshot-2.png", "screenshot-3.png"])
+
+    def test_trim_processed_cache_keeps_newest_contexts(self):
+        processor = self._build_processor()
+        contexts = [self._processed_context(index) for index in range(4)]
+        context_cache = {context.id: context for context in contexts}
+
+        trimmed = processor._trim_processed_cache(context_cache)
+
+        self.assertEqual(len(trimmed), 2)
+        self.assertEqual(
+            [context.extracted_data.title for context in trimmed.values()],
+            ["context 2", "context 3"],
+        )
 
 
 if __name__ == "__main__":
