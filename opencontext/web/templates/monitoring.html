@@ -92,10 +92,10 @@
             </div>
         </div>
 
-        <!-- 核心指标卡片 - 2个（Token消耗 + Context统计，带时间范围选择） -->
+        <!-- 核心指标卡片 -->
         <div class="row mb-4">
             <!-- Token 消耗统计 -->
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card metric-card border-primary">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -115,7 +115,7 @@
             </div>
 
             <!-- Context 统计 -->
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card metric-card border-success">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -130,6 +130,17 @@
                         </div>
                         <div class="metric-value text-center text-success" id="totalContexts">-</div>
                         <small class="metric-label d-block text-center" id="contextLabel">24小时内新增</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VLM 平均耗时 -->
+            <div class="col-md-4">
+                <div class="card metric-card border-warning">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning mb-3">VLM 平均耗时</h5>
+                        <div class="metric-value text-center text-warning" id="avgVlmLatency">-</div>
+                        <small class="metric-label d-block text-center" id="vlmLatencyLabel">最近24小时</small>
                     </div>
                 </div>
             </div>
@@ -267,6 +278,7 @@
 
                 // 获取环节耗时
                 const stageTiming = await fetchData('/api/monitoring/stage-timing');
+                updateVlmLatencyDisplay(stageTiming.data);
                 updateStageTimingChart(stageTiming.data);
 
                 // 获取数据统计（用于 Context 统计）
@@ -343,6 +355,34 @@
         function updateContextDisplay(total, label) {
             document.getElementById('totalContexts').textContent = total.toLocaleString();
             document.getElementById('contextLabel').textContent = label;
+        }
+
+        function formatDuration(ms) {
+            if (!ms || ms <= 0) {
+                return '0 ms';
+            }
+            if (ms < 1000) {
+                return `${Math.round(ms)} ms`;
+            }
+            if (ms < 60000) {
+                return `${(ms / 1000).toFixed(1)} s`;
+            }
+            return `${(ms / 60000).toFixed(1)} min`;
+        }
+
+        function updateVlmLatencyDisplay(data) {
+            const stage = data.by_stage?.chat_cost;
+            const value = document.getElementById('avgVlmLatency');
+            const label = document.getElementById('vlmLatencyLabel');
+
+            if (!stage || !stage.count) {
+                value.textContent = '-';
+                label.textContent = '最近24小时无 VLM 调用';
+                return;
+            }
+
+            value.textContent = formatDuration(stage.avg_duration || 0);
+            label.textContent = `最近24小时 ${stage.count} 次调用`;
         }
 
         function updateContextChart(contextTypes, chartTitle) {
