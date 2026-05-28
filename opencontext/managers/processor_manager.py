@@ -91,6 +91,7 @@ class ContextProcessorManager:
         """
         self._routing_table = {
             ContextSource.SCREENSHOT: "screenshot_processor",
+            ContextSource.INPUT: "document_processor",
             ContextSource.LOCAL_FILE: "document_processor",
             ContextSource.VAULT: "document_processor",
             ContextSource.WEB_LINK: "document_processor",

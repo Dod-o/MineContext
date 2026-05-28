@@ -6,6 +6,29 @@
     <h1 class="h2">上下文列表</h1>
 </div>
 
+<div class="card mb-3">
+    <div class="card-header">
+        <h5 class="card-title mb-0">手动录入上下文</h5>
+    </div>
+    <div class="card-body">
+        <form id="manual-context-form">
+            <div class="row g-2 mb-2">
+                <div class="col-md-7">
+                    <input id="manual-context-title" type="text" class="form-control" maxlength="160" placeholder="标题（可选）">
+                </div>
+                <div class="col-md-5">
+                    <input id="manual-context-occurred-at" type="datetime-local" class="form-control">
+                </div>
+            </div>
+            <textarea id="manual-context-content" class="form-control mb-2" rows="4" required placeholder="输入当前工作状态、截图文字或需要记住的上下文"></textarea>
+            <div class="d-flex align-items-center gap-2">
+                <button id="manual-context-submit" type="submit" class="btn btn-primary">提交</button>
+                <div id="manual-context-status" class="small"></div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="row mb-3">
     <div class="col-md-6">
         <form method="get" class="d-flex">
@@ -81,6 +104,61 @@
 
 {% block scripts %}
 <script>
+    function showManualContextStatus(message, type) {
+        const status = document.getElementById('manual-context-status');
+        status.textContent = message;
+        status.className = `small text-${type}`;
+    }
+
+    document.getElementById('manual-context-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const title = document.getElementById('manual-context-title').value.trim();
+        const content = document.getElementById('manual-context-content').value.trim();
+        const occurredAt = document.getElementById('manual-context-occurred-at').value;
+        const submitButton = document.getElementById('manual-context-submit');
+
+        if (!content) {
+            showManualContextStatus('请输入上下文内容', 'danger');
+            return;
+        }
+
+        const payload = { content };
+        if (title) {
+            payload.title = title;
+        }
+        if (occurredAt) {
+            payload.occurred_at = occurredAt;
+        }
+
+        submitButton.disabled = true;
+        showManualContextStatus('提交中...', 'muted');
+
+        try {
+            const response = await fetch('/api/contexts/manual', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            if (response.ok && result.code === 0) {
+                this.reset();
+                showManualContextStatus('已加入处理队列', 'success');
+                setTimeout(() => window.location.reload(), 800);
+            } else {
+                showManualContextStatus(result.message || '提交失败', 'danger');
+            }
+        } catch (error) {
+            console.error('手动录入上下文失败:', error);
+            showManualContextStatus('提交失败，请查看控制台获取详细信息', 'danger');
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
+
     async function viewContext(contextId, contextType) {
         try {
             const response = await fetch('/contexts/detail', {
@@ -141,4 +219,3 @@
     });
 </script>
 {% endblock %}
-        

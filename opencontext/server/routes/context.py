@@ -8,6 +8,8 @@ Context management routes
 """
 
 import json
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -16,7 +18,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from opencontext.models.context import ProcessedContextModel
+from opencontext.models.context import ProcessedContextModel, RawContextProperties
 from opencontext.models.enums import ContentFormat, ContextSource
 from opencontext.server.middleware.auth import auth_dependency
 from opencontext.server.opencontext import OpenContext
@@ -45,6 +47,12 @@ class UpdateContextIn(BaseModel):
     keywords: Optional[List[str]] = None
 
 
+class ManualContextIn(BaseModel):
+    title: Optional[str] = None
+    content: str
+    occurred_at: Optional[datetime] = None
+
+
 class QueryIn(BaseModel):
     query: str
 
@@ -64,6 +72,34 @@ class VectorSearchRequest(BaseModel):
     top_k: int = 10
     context_types: Optional[List[str]] = None
     filters: Optional[Dict[str, Any]] = None
+
+
+def _build_manual_context(request: ManualContextIn) -> RawContextProperties:
+    content = request.content.strip()
+    if not content:
+        raise ValueError("Manual context content cannot be empty")
+
+    title = request.title.strip() if request.title else ""
+    object_id = f"manual_{uuid.uuid4()}"
+    content_text = f"{title}\n\n{content}" if title else content
+
+    return RawContextProperties(
+        source=ContextSource.INPUT,
+        content_format=ContentFormat.TEXT,
+        create_time=request.occurred_at or datetime.now(),
+        object_id=object_id,
+        content_type="manual_context",
+        content_text=content_text,
+        filter_path=f"/manual/{object_id}",
+        additional_info={
+            "raw_type": "manual_context",
+            "raw_id": object_id,
+            "title": title,
+            "capture_mode": "manual",
+            "content_length": len(content),
+        },
+        enable_merge=False,
+    )
 
 
 @router.post("/contexts/delete")
@@ -99,6 +135,33 @@ async def read_context_detail(
             "context": ProcessedContextModel.from_processed_context(context, project_root),
         },
     )
+
+
+@router.post("/api/contexts/manual")
+async def add_manual_context(
+    request: ManualContextIn,
+    opencontext: OpenContext = Depends(get_context_lab),
+    _auth: str = auth_dependency,
+):
+    """Queue manually entered text context for processing."""
+    try:
+        raw_context = _build_manual_context(request)
+    except ValueError as e:
+        return convert_resp(code=400, status=400, message=str(e))
+
+    try:
+        if not opencontext.add_context(raw_context):
+            return convert_resp(
+                code=500, status=500, message="Failed to queue manual context"
+            )
+
+        return convert_resp(
+            data={"object_id": raw_context.object_id},
+            message="Manual context queued for processing",
+        )
+    except Exception as e:
+        logger.exception(f"Error adding manual context: {e}")
+        return convert_resp(code=500, status=500, message=f"Manual context failed: {str(e)}")
 
 
 @router.get("/api/context_types")
