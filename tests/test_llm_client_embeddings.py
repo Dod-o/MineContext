@@ -106,6 +106,8 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertTrue(valid, message)
         self.assertEqual(message, "Embedding model validation successful")
+        self.assertEqual(FakeOpenAI.last_base_url, "http://127.0.0.1:8000/v1")
+        self.assertEqual(FakeOpenAI.last_api_key, "test-key")
 
     def test_custom_embedding_allows_local_server_without_api_key(self):
         client = self.llm_client.LLMClient(
