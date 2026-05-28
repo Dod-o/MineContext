@@ -14,7 +14,7 @@ class SyncRoutesStaticTest(unittest.TestCase):
         self.assertIn("sync,", api)
         self.assertIn("router.include_router(sync.router)", api)
 
-    def test_sync_export_import_cover_todos_and_summary_reports(self):
+    def test_sync_export_import_cover_todos_reports_and_activities(self):
         route = SYNC_ROUTE.read_text(encoding="utf-8")
 
         self.assertIn('@router.get("/api/sync/export")', route)
@@ -25,6 +25,8 @@ class SyncRoutesStaticTest(unittest.TestCase):
         self.assertIn("VaultType.WEEKLY_REPORT.value", route)
         self.assertIn("storage.insert_vaults", route)
         self.assertIn("storage.update_vault", route)
+        self.assertIn("storage.get_activities", route)
+        self.assertIn("storage.insert_activity", route)
 
     def test_sync_import_deduplicates_by_stable_keys(self):
         route = SYNC_ROUTE.read_text(encoding="utf-8")
@@ -33,6 +35,8 @@ class SyncRoutesStaticTest(unittest.TestCase):
         self.assertIn("existing_vaults", route)
         self.assertIn("skipped_todos", route)
         self.assertIn("skipped_vaults", route)
+        self.assertIn("existing_activity_keys", route)
+        self.assertIn("skipped_activities", route)
 
 
 if __name__ == "__main__":

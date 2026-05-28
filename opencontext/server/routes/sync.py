@@ -41,12 +41,22 @@ class SyncVault(BaseModel):
     updated_at: Optional[Any] = None
 
 
+class SyncActivity(BaseModel):
+    title: str
+    content: str = ""
+    resources: Optional[str] = None
+    metadata: Optional[str] = None
+    start_time: Optional[Any] = None
+    end_time: Optional[Any] = None
+
+
 class SyncBundle(BaseModel):
     schema_version: int = Field(default=1, ge=1)
     device_id: Optional[str] = None
     exported_at: Optional[Any] = None
     todos: List[SyncTodo] = Field(default_factory=list)
     vaults: List[SyncVault] = Field(default_factory=list)
+    activities: List[SyncActivity] = Field(default_factory=list)
 
 
 def _parse_datetime(value: Any) -> Optional[datetime.datetime]:
@@ -83,6 +93,15 @@ def _vault_key(vault: Dict[str, Any]) -> tuple[str, str]:
     )
 
 
+def _activity_key(activity: Dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(activity.get("title") or "").strip(),
+        str(activity.get("content") or "").strip(),
+        _datetime_key(activity.get("start_time")),
+        _datetime_key(activity.get("end_time")),
+    )
+
+
 def _export_todos(limit: int = 5000) -> List[Dict[str, Any]]:
     return get_storage().get_todos(limit=limit, offset=0)
 
@@ -102,9 +121,13 @@ def _export_summary_vaults(limit: int = 5000) -> List[Dict[str, Any]]:
     return vaults
 
 
+def _export_activities(limit: int = 5000) -> List[Dict[str, Any]]:
+    return get_storage().get_activities(limit=limit, offset=0)
+
+
 @router.get("/api/sync/export")
 async def export_sync_bundle(_auth: str = auth_dependency):
-    """Export todos and summary reports for another MineContext device."""
+    """Export todos, summary reports, and activity records for another MineContext device."""
     try:
         bundle = {
             "schema_version": 1,
@@ -112,6 +135,7 @@ async def export_sync_bundle(_auth: str = auth_dependency):
             "exported_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "todos": _export_todos(),
             "vaults": _export_summary_vaults(),
+            "activities": _export_activities(),
         }
         return convert_resp(data=bundle)
     except Exception as e:
@@ -141,6 +165,9 @@ async def import_sync_bundle(bundle: SyncBundle, _auth: str = auth_dependency):
                     offset=0,
                 )
             )
+        }
+        existing_activity_keys = {
+            _activity_key(activity) for activity in storage.get_activities(limit=10000, offset=0)
         }
 
         imported_todos = 0
@@ -201,6 +228,25 @@ async def import_sync_bundle(bundle: SyncBundle, _auth: str = auth_dependency):
             existing_vaults[key] = {"id": vault_id, **vault_dict}
             imported_vaults += 1
 
+        imported_activities = 0
+        skipped_activities = 0
+        for activity in bundle.activities:
+            activity_dict = activity.model_dump()
+            key = _activity_key(activity_dict)
+            if key in existing_activity_keys:
+                skipped_activities += 1
+                continue
+            storage.insert_activity(
+                title=activity.title,
+                content=activity.content,
+                resources=activity.resources,
+                metadata=activity.metadata,
+                start_time=_parse_datetime(activity.start_time),
+                end_time=_parse_datetime(activity.end_time),
+            )
+            existing_activity_keys.add(key)
+            imported_activities += 1
+
         return convert_resp(
             data={
                 "imported_todos": imported_todos,
@@ -208,10 +254,11 @@ async def import_sync_bundle(bundle: SyncBundle, _auth: str = auth_dependency):
                 "imported_vaults": imported_vaults,
                 "updated_vaults": updated_vaults,
                 "skipped_vaults": skipped_vaults,
+                "imported_activities": imported_activities,
+                "skipped_activities": skipped_activities,
             },
             message="Sync bundle imported",
         )
     except Exception as e:
         logger.exception(f"Failed to import sync bundle: {e}")
         return convert_resp(code=500, status=500, message=f"Failed to import sync bundle: {str(e)}")
-
