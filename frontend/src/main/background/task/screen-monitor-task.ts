@@ -1,7 +1,7 @@
 import { ScreenSettings } from './../../../renderer/src/store/setting';
 import { CaptureSource } from '@interface/common/source'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
 import { get, pick, uniqBy } from 'lodash'
 import screenshotService from '../../services/ScreenshotService'
 import { AutoRefreshCache } from './cache-value'
@@ -25,6 +25,7 @@ dayjs.extend(isSameOrBefore)
 const queue = new PQueue({ concurrency: 3 })
 
 const logger = getLogger('ScreenMonitorTask')
+const IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS = 5 * 60
 
 class ScreenMonitorTask extends ScheduleNextTask {
   static globalStatus: 'running' | 'stopped' = 'stopped'
@@ -181,8 +182,19 @@ class ScreenMonitorTask extends ScheduleNextTask {
 
     return uniqBy(resolvedSources, 'id')
   }
+  private shouldSkipCaptureForIdleState() {
+    const idleState = powerMonitor.getSystemIdleState(IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS)
+    if (idleState === 'idle' || idleState === 'locked') {
+      logger.info(`Skipping screen capture while system is ${idleState}`)
+      return true
+    }
+    return false
+  }
   private async startScreenMonitor() {
     try {
+      if (this.shouldSkipCaptureForIdleState()) {
+        return
+      }
       let visibleSources = this.configCache?.get()
       if (!visibleSources || visibleSources.length === 0) {
         visibleSources = await this.getVisibleSourcesUseCache()
