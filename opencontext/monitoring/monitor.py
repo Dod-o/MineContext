@@ -81,6 +81,10 @@ class RecordingSessionStats:
     processed_screenshots: int = 0
     failed_screenshots: int = 0
     generated_activities: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    token_usage_by_model: Dict[str, Dict[str, int]] = field(default_factory=dict)
     last_activity_time: Optional[datetime] = None
     session_start_time: datetime = field(default_factory=datetime.now)
     recent_screenshot_paths: deque = field(default_factory=lambda: deque(maxlen=5))
@@ -150,6 +154,20 @@ class Monitor:
 
             # Persist to database
             self._persist_token_usage(model, prompt_tokens, completion_tokens, total_tokens)
+            self._recording_stats.prompt_tokens += prompt_tokens
+            self._recording_stats.completion_tokens += completion_tokens
+            self._recording_stats.total_tokens += total_tokens
+            model_usage = self._recording_stats.token_usage_by_model.setdefault(
+                model,
+                {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                },
+            )
+            model_usage["prompt_tokens"] += prompt_tokens
+            model_usage["completion_tokens"] += completion_tokens
+            model_usage["total_tokens"] += total_tokens
 
     def _persist_token_usage(
         self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int
@@ -696,6 +714,16 @@ class Monitor:
 
             # Get recent screenshots (最多5张)
             stats["recent_screenshots"] = list(self._recording_stats.recent_screenshot_paths)
+
+            stats["token_usage"] = {
+                "prompt_tokens": self._recording_stats.prompt_tokens,
+                "completion_tokens": self._recording_stats.completion_tokens,
+                "total_tokens": self._recording_stats.total_tokens,
+                "models": {
+                    model: usage.copy()
+                    for model, usage in self._recording_stats.token_usage_by_model.items()
+                },
+            }
 
             return stats
 
