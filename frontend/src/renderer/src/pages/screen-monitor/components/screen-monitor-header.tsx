@@ -34,7 +34,10 @@ const ScreenMonitorHeader: React.FC<ScreenMonitorHeaderProps> = ({
           className="[&_.arco-typography]: !mt-1 [&_.arco-typography]: !font-bold [&_.arco-typography]: !text-[24px] [&_.arco-typography]: !text-black">
           Screen Monitor
         </Title>
-        <Text type="secondary" className="[&_.arco-typography]: !text-[13px]">
+        <Text
+          type="secondary"
+          className="!text-[13px]"
+          style={{ display: 'block', lineHeight: '20px', wordBreak: 'normal', overflowWrap: 'normal' }}>
           Screen Monitor captures anything on your screen and transforms it into intelligent, connected Contexts. All
           data stays local with full privacy protection ✨
         </Text>
