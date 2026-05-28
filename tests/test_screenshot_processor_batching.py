@@ -207,6 +207,17 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
         self.assertEqual(recorded_errors[0][1:], ("screenshot_processor", 2))
         self.assertIn("No contexts extracted", recorded_errors[0][0])
 
+    def test_processing_loop_drops_failed_batches_and_continues_after_backoff(self):
+        source = module_path.read_text(encoding="utf-8")
+
+        self.assertIn('record_processing_error(\n                    error_msg', source)
+        self.assertIn('increment_recording_stat("failed", len(unprocessed_contexts))', source)
+        self.assertIn("failed_count = len(unprocessed_contexts)", source)
+        self.assertIn("unprocessed_contexts.clear()", source)
+        self.assertIn("backoff_seconds = min(60, 2 ** min(consecutive_failures, 5))", source)
+        self.assertIn("self._stop_event.wait(backoff_seconds)", source)
+        self.assertIn("continue", source)
+
     def test_vlm_response_accepts_root_list_and_skips_invalid_items(self):
         processor = self._build_processor()
 
