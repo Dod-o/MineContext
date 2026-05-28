@@ -74,6 +74,12 @@ class EventManager:
                 logger.warning(f"Cache overflow, removing old event: {removed_event.id}")
 
         logger.info(f"Published event to cache: {event_type.value}, ID: {event_id}")
+        try:
+            from opencontext.plugins.plugin_manager import dispatch_event_async
+
+            dispatch_event_async(event)
+        except Exception as e:
+            logger.warning(f"Failed to dispatch event to plugins: {e}")
         return event_id
 
     def fetch_and_clear_events(self) -> List[Dict[str, Any]]:
