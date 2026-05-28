@@ -76,7 +76,7 @@ const RecordingStatsCard: React.FC<RecordingStatsCardProps> = ({ stats }) => {
       {/* Recent screenshots display */}
       {stats.recent_screenshots && stats.recent_screenshots.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
-          <Image.PreviewGroup className="[&_.arco-image-preview-img]:!scale-80">
+          <Image.PreviewGroup infinite={false} className="[&_.arco-image-preview-img]:!scale-80">
             {stats.recent_screenshots.map((path, index) => (
               <Image
                 key={index}

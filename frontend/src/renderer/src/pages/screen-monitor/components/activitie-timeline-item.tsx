@@ -24,7 +24,7 @@ const ActivityTimelineItem: FC<ActivityTimelineItemProps> = (props) => {
         </div>
       </Popover>
       <div className="screenshots-container flex flex-wrap align-center gap-2">
-        <Image.PreviewGroup className="[&_.arco-image-preview-img]:!scale-80">
+        <Image.PreviewGroup infinite={false} className="[&_.arco-image-preview-img]:!scale-80">
           {(activity?.resources || [])
             .filter((resource) => resource.type === 'image')
             .map((resource, index) => {
