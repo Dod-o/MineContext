@@ -27,6 +27,12 @@ from opencontext.utils.image_storage import (
     get_image_storage_status,
 )
 from opencontext.utils.logging_utils import get_logger
+from opencontext.utils.prompt_history import (
+    PROMPT_HISTORY_CATEGORY_DIRS,
+    get_prompt_history_dir,
+    is_safe_history_filename,
+    list_prompt_history_files,
+)
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["model-settings"])
@@ -755,68 +761,17 @@ async def get_prompts_history(category: str, _auth: str = auth_dependency):
         List of history files with metadata
     """
     try:
-        import os
-        from pathlib import Path
-
-        # Map category names to directory names
-        category_map = {
-            "smart_tip_generation": "tips",
-            "todo_extraction": "todo",
-            "generation_report": "report",
-            "realtime_activity_monitor": "activity",
-        }
-
-        if category not in category_map:
+        if category not in PROMPT_HISTORY_CATEGORY_DIRS:
             return convert_resp(code=400, status=400, message=f"Invalid category: {category}")
-
-        dir_name = category_map[category]
 
         # Get debug output path from config
         config = GlobalConfig.get_instance().get_config()
         if not config:
             return convert_resp(code=500, status=500, message="Configuration not initialized")
 
-        debug_config = config.get("content_generation", {}).get("debug", {})
-        if not debug_config.get("enabled", False):
-            return convert_resp(code=400, status=400, message="Debug mode is not enabled")
-
-        base_path = debug_config.get("output_path", "${CONTEXT_PATH:.}/debug/generation")
-
-        # Resolve environment variables
-        if "${CONTEXT_PATH" in base_path:
-            context_path = os.getenv("CONTEXT_PATH", ".")
-            base_path = base_path.replace("${CONTEXT_PATH:.}", context_path)
-            base_path = base_path.replace("${CONTEXT_PATH}", context_path)
-
-        # Get directory path
-        history_dir = Path(base_path) / dir_name
-
-        if not history_dir.exists():
-            return convert_resp(data=[])
-
-        # List all JSON files
-        history_files = []
-        for filepath in sorted(history_dir.glob("*.json"), reverse=True):  # Most recent first
-            try:
-                # Read file to check if it has response
-                import json
-
-                with open(filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                has_result = bool(data.get("response"))
-                timestamp_str = data.get("timestamp", "")
-
-                history_files.append(
-                    {
-                        "filename": filepath.name,
-                        "timestamp": timestamp_str,
-                        "has_result": has_result,
-                    }
-                )
-            except Exception as e:
-                logger.warning(f"Failed to read history file {filepath}: {e}")
-                continue
+        history_files = list_prompt_history_files(config, category)
+        if history_files is None:
+            return convert_resp(code=400, status=400, message=f"Invalid category: {category}")
 
         return convert_resp(data=history_files)
 
@@ -839,41 +794,23 @@ async def get_prompts_history_detail(category: str, filename: str, _auth: str = 
     """
     try:
         import json
-        import os
-        from pathlib import Path
 
-        # Map category names to directory names
-        category_map = {
-            "smart_tip_generation": "tips",
-            "todo_extraction": "todo",
-            "generation_report": "report",
-            "realtime_activity_monitor": "activity",
-        }
-
-        if category not in category_map:
+        if category not in PROMPT_HISTORY_CATEGORY_DIRS:
             return convert_resp(code=400, status=400, message=f"Invalid category: {category}")
-
-        dir_name = category_map[category]
 
         # Get debug output path from config
         config = GlobalConfig.get_instance().get_config()
         if not config:
             return convert_resp(code=500, status=500, message="Configuration not initialized")
 
-        debug_config = config.get("content_generation", {}).get("debug", {})
-        base_path = debug_config.get("output_path", "${CONTEXT_PATH:.}/debug/generation")
-
-        # Resolve environment variables
-        if "${CONTEXT_PATH" in base_path:
-            context_path = os.getenv("CONTEXT_PATH", ".")
-            base_path = base_path.replace("${CONTEXT_PATH:.}", context_path)
-            base_path = base_path.replace("${CONTEXT_PATH}", context_path)
-
         # Get file path (validate filename to prevent directory traversal)
-        if ".." in filename or "/" in filename or "\\" in filename:
+        if not is_safe_history_filename(filename):
             return convert_resp(code=400, status=400, message="Invalid filename")
 
-        filepath = Path(base_path) / dir_name / filename
+        history_dir = get_prompt_history_dir(config, category)
+        if history_dir is None:
+            return convert_resp(code=400, status=400, message=f"Invalid category: {category}")
+        filepath = history_dir / filename
 
         if not filepath.exists():
             return convert_resp(code=404, status=404, message="History file not found")
@@ -912,47 +849,27 @@ async def regenerate_with_custom_prompts(request: RegenerateRequest, _auth: str 
     """
     try:
         import json
-        import os
-        from pathlib import Path
 
-        # Map category names to directory names
-        category_map = {
-            "smart_tip_generation": "tips",
-            "todo_extraction": "todo",
-            "generation_report": "report",
-            "realtime_activity_monitor": "activity",
-        }
-
-        if request.category not in category_map:
+        if request.category not in PROMPT_HISTORY_CATEGORY_DIRS:
             return convert_resp(
                 code=400, status=400, message=f"Invalid category: {request.category}"
             )
-
-        dir_name = category_map[request.category]
 
         # Get debug output path from config
         config = GlobalConfig.get_instance().get_config()
         if not config:
             return convert_resp(code=500, status=500, message="Configuration not initialized")
 
-        debug_config = config.get("content_generation", {}).get("debug", {})
-        base_path = debug_config.get("output_path", "${CONTEXT_PATH:.}/debug/generation")
-
-        # Resolve environment variables
-        if "${CONTEXT_PATH" in base_path:
-            context_path = os.getenv("CONTEXT_PATH", ".")
-            base_path = base_path.replace("${CONTEXT_PATH:.}", context_path)
-            base_path = base_path.replace("${CONTEXT_PATH}", context_path)
-
         # Validate and read history file
-        if (
-            ".." in request.history_file
-            or "/" in request.history_file
-            or "\\" in request.history_file
-        ):
+        if not is_safe_history_filename(request.history_file):
             return convert_resp(code=400, status=400, message="Invalid filename")
 
-        filepath = Path(base_path) / dir_name / request.history_file
+        history_dir = get_prompt_history_dir(config, request.category)
+        if history_dir is None:
+            return convert_resp(
+                code=400, status=400, message=f"Invalid category: {request.category}"
+            )
+        filepath = history_dir / request.history_file
 
         if not filepath.exists():
             return convert_resp(code=404, status=404, message="History file not found")

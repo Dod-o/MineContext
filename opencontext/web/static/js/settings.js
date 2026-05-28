@@ -48,6 +48,15 @@ function formatApiError(data, response, fallback) {
     return `${fallback}: ${detail}`;
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function formatBytes(bytes) {
     const value = Number(bytes || 0);
     if (value < 1024) return `${value} B`;
@@ -999,14 +1008,15 @@ async function viewHistory(category) {
                 historyList.innerHTML = '<p class="text-muted">暂无历史记录</p>';
             } else {
                 data.data.forEach(item => {
+                    const timestamp = item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A';
                     const btn = document.createElement('button');
                     btn.className = 'list-group-item list-group-item-action';
                     btn.innerHTML = `
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">${new Date(item.timestamp).toLocaleString()}</h6>
+                            <h6 class="mb-1">${escapeHtml(timestamp)}</h6>
                             <small>${item.has_result ? '✓' : '×'}</small>
                         </div>
-                        <small class="text-muted">${item.filename}</small>
+                        <small class="text-muted">${escapeHtml(item.filename)}</small>
                     `;
                     btn.onclick = () => loadHistoryDetail(category, item.filename);
                     historyList.appendChild(btn);
@@ -1053,19 +1063,19 @@ async function loadHistoryDetail(category, filename) {
 
             detail.innerHTML = `
                 <div class="mb-3">
-                    <strong>文件名:</strong> ${filename}
+                    <strong>文件名:</strong> ${escapeHtml(filename)}
                 </div>
                 <div class="mb-3">
-                    <strong>时间戳:</strong> ${data.data.timestamp || 'N/A'}
+                    <strong>时间戳:</strong> ${escapeHtml(data.data.timestamp || 'N/A')}
                 </div>
                 <div class="mb-3">
                     <strong>Messages:</strong>
-                    <div class="border p-2 bg-light" style="max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.875rem;" contenteditable="true">${JSON.stringify(data.data.messages, null, 2)}</div>
+                    <div class="border p-2 bg-light" style="max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.875rem;" contenteditable="true">${escapeHtml(JSON.stringify(data.data.messages, null, 2))}</div>
                     <small class="text-muted">可编辑（仅用于查看，不会保存）</small>
                 </div>
                 <div class="mb-3">
                     <strong>Response:</strong>
-                    <div class="border p-2 bg-light" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.875rem;" contenteditable="true">${formattedResponse}</div>
+                    <div class="border p-2 bg-light" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.875rem;" contenteditable="true">${escapeHtml(formattedResponse)}</div>
                     <small class="text-muted">可编辑（仅用于查看，不会保存）</small>
                 </div>
             `;
