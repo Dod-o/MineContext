@@ -34,12 +34,11 @@ logger = get_logger(__name__)
 
 class ContextMerger(BaseContextProcessor):
     def __init__(self):
-        from opencontext.config.global_config import get_config, get_prompt_manager
+        from opencontext.config.global_config import get_config
 
         config = get_config("processing.context_merger") or {}
         super().__init__(config)
 
-        self.prompt_manager = get_prompt_manager()
         self._similarity_threshold = config.get("similarity_threshold", 0.85)
         self.associative_similarity_threshold = config.get("associative_similarity_threshold", 0.6)
         self._statistics = {"merges_attempted": 0, "merges_succeeded": 0, "errors": 0}
@@ -62,6 +61,13 @@ class ContextMerger(BaseContextProcessor):
 
     def get_description(self) -> str:
         return "Merges similar contexts using intelligent type-aware strategies."
+
+    def _get_prompt_group(self, name: str) -> Dict[str, str]:
+        prompt_manager = GlobalConfig.get_instance().get_prompt_manager()
+        if not prompt_manager:
+            logger.error("Prompt manager not initialized.")
+            return {}
+        return prompt_manager.get_prompt_group(name)
 
     def _initialize_strategies(self):
         """Initialize all supported merge strategies"""
@@ -337,14 +343,14 @@ class ContextMerger(BaseContextProcessor):
             type_specific_prompt = f"merging.{context_type.value}_merging"
 
             # First, try the type-specific prompt
-            prompt_group = self.prompt_manager.get_prompt_group(type_specific_prompt)
+            prompt_group = self._get_prompt_group(type_specific_prompt)
             if prompt_group and "user" in prompt_group:
                 prompt_name = type_specific_prompt
                 logger.info(f"Using type-specific prompt: {prompt_name}")
             else:
                 # Fallback to the generic prompt
                 prompt_name = "merging.context_merging_multiple"
-                prompt_group = self.prompt_manager.get_prompt_group(prompt_name)
+                prompt_group = self._get_prompt_group(prompt_name)
                 logger.info(f"Using generic prompt: {prompt_name}")
 
             if not prompt_group or "user" not in prompt_group:

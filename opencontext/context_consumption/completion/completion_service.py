@@ -61,7 +61,6 @@ class CompletionService:
         self.embedding_client = None
         self.chat_client = None
         self.cache = get_completion_cache()  # Use a dedicated cache manager
-        self.prompt_manager = None  # Prompt manager
         self.semantic_search_tool = None  # SemanticContextTool instance
 
         # Completion configuration
@@ -77,8 +76,6 @@ class CompletionService:
         try:
             # Get storage and LLM manager
             self.storage = get_storage()
-
-            self.prompt_manager = get_prompt_manager()
 
             # Initialize SemanticContextTool
             self.semantic_search_tool = SemanticContextTool()
@@ -249,7 +246,11 @@ class CompletionService:
                 return suggestions
 
             # Get prompt group
-            prompt_group = self.prompt_manager.get_prompt_group(
+            prompt_manager = get_prompt_manager()
+            if not prompt_manager:
+                logger.error("Prompt manager not initialized.")
+                return suggestions
+            prompt_group = prompt_manager.get_prompt_group(
                 "completion_service.semantic_continuation"
             )
             system_prompt = prompt_group.get("system", "")

@@ -8,6 +8,7 @@
 Global configuration manager, providing a unified interface for accessing configurations and prompts
 """
 
+import locale
 import os
 import threading
 from pathlib import Path
@@ -18,6 +19,8 @@ from opencontext.config.prompt_manager import PromptManager
 from opencontext.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+SUPPORTED_PROMPT_LANGUAGES = {"zh", "en"}
 
 
 class GlobalConfig:
@@ -126,7 +129,7 @@ class GlobalConfig:
 
         # Get prompt configuration from the main configuration
         prompts_config = config.get("prompts", {})
-        language = prompts_config.get("language", "zh")
+        language = self._resolve_prompt_language(prompts_config.get("language", "auto"))
         prompts_path = f"prompts_{language}.yaml"
 
         base_dir = os.path.dirname(self._config_path)
@@ -153,6 +156,47 @@ class GlobalConfig:
         except Exception as e:
             logger.error(f"Failed to load prompts: {e}")
             return False
+
+    @staticmethod
+    def _language_from_locale(locale_name: Optional[str]) -> Optional[str]:
+        if not locale_name:
+            return None
+
+        normalized = locale_name.strip().lower()
+        if not normalized:
+            return None
+        if normalized == "auto":
+            return None
+        if normalized.startswith("zh") or "chinese" in normalized:
+            return "zh"
+        return "en"
+
+    def _get_default_prompt_language(self) -> str:
+        for env_name in ("OPENCONTEXT_PROMPT_LANGUAGE", "OPENCONTEXT_SYSTEM_LOCALE"):
+            language = self._language_from_locale(os.getenv(env_name))
+            if language:
+                return language
+
+        try:
+            language = self._language_from_locale(locale.getlocale()[0])
+            if language:
+                return language
+        except Exception as e:
+            logger.debug(f"Failed to detect system locale for prompt language: {e}")
+
+        return "en"
+
+    def _resolve_prompt_language(self, language: Optional[str]) -> str:
+        if isinstance(language, str):
+            normalized = language.strip().lower()
+            if normalized in SUPPORTED_PROMPT_LANGUAGES:
+                return normalized
+            if normalized and normalized != "auto":
+                logger.warning(
+                    f"Unsupported prompt language '{language}', falling back to system locale"
+                )
+
+        return self._get_default_prompt_language()
 
     def set_config_manager(self, config_manager: ConfigManager):
         """
@@ -186,7 +230,7 @@ class GlobalConfig:
         """
         if hasattr(self, "_language"):
             return self._language
-        return "zh"
+        return self._get_default_prompt_language()
 
     def set_language(self, language: str) -> bool:
         """

@@ -176,6 +176,10 @@ async function checkBackendHealth(options: HealthCheckOptions = {}) {
   }
 }
 
+function resolvePromptLanguageFromLocale(locale: string | undefined): 'zh' | 'en' {
+  return (locale || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
 function parseHealthCheckResult(result: unknown): any | null {
   if (typeof result === 'string') {
     try {
@@ -641,9 +645,13 @@ async function startBackendServer(mainWindow: BrowserWindow) {
       logToBackendFile(`Config exists: ${fs.existsSync(configPath)}`)
 
       // Prepare environment variables
+      const systemLocale = app.getLocale()
       const env = {
         ...process.env,
-        CONTEXT_PATH: resolveAppDataRoot()
+        CONTEXT_PATH: resolveAppDataRoot(),
+        OPENCONTEXT_SYSTEM_LOCALE: systemLocale,
+        OPENCONTEXT_PROMPT_LANGUAGE:
+          process.env.OPENCONTEXT_PROMPT_LANGUAGE || resolvePromptLanguageFromLocale(systemLocale)
       } as Record<string, string>
 
       // Prepare command line arguments: ./main start --port <port> --config config/config.yaml
