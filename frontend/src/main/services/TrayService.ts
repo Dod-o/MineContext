@@ -8,6 +8,25 @@ import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
 import screenshotService from './ScreenshotService'
 
 const logger = getLogger('TrayService')
+const trayLabels = {
+  en: {
+    recording: 'Recording',
+    paused: 'Paused',
+    showMainWindow: 'Show Main Window',
+    pauseRecording: 'Pause Recording',
+    resumeRecording: 'Resume Recording',
+    quit: 'Quit MineContext'
+  },
+  zh: {
+    recording: '录制中',
+    paused: '已暂停',
+    showMainWindow: '显示主窗口',
+    pauseRecording: '暂停录制',
+    resumeRecording: '继续录制',
+    quit: '退出 MineContext'
+  }
+}
+type TrayLabelKey = keyof typeof trayLabels.en
 
 export class TrayService {
   private tray: Tray | null = null
@@ -19,6 +38,11 @@ export class TrayService {
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
     this.loadIcons()
+  }
+
+  private get labels() {
+    const locale = app.getLocale().toLowerCase()
+    return locale.startsWith('zh') ? trayLabels.zh : trayLabels.en
   }
 
   /**
@@ -169,7 +193,8 @@ export class TrayService {
    * Build the context menu based on current state
    */
   private buildContextMenu(): Menu {
-    const recordingStatusLabel = this.isRecording ? '录制中' : '已暂停'
+    const labels = this.labels
+    const recordingStatusLabel = this.isRecording ? labels.recording : labels.paused
 
     const menuTemplate: Electron.MenuItemConstructorOptions[] = [
       {
@@ -180,14 +205,14 @@ export class TrayService {
         type: 'separator'
       },
       {
-        label: '显示主窗口',
+        label: labels.showMainWindow,
         click: () => {
           this.mainWindow.show()
           this.mainWindow.focus()
         }
       },
       {
-        label: this.isRecording ? '暂停录制' : '继续录制',
+        label: this.isRecording ? labels.pauseRecording : labels.resumeRecording,
         click: () => {
           this.toggleRecording()
         }
@@ -196,7 +221,7 @@ export class TrayService {
         type: 'separator'
       },
       {
-        label: '退出 MineContext',
+        label: labels.quit,
         click: () => {
           this.quitApp()
         }
@@ -263,7 +288,7 @@ export class TrayService {
       }
 
       // Update tooltip
-      const tooltip = isRecording ? 'MineContext - 录制中' : 'MineContext - 已暂停'
+      const tooltip = isRecording ? `MineContext - ${this.t('recording')}` : `MineContext - ${this.t('paused')}`
       this.tray.setToolTip(tooltip)
 
       // Update context menu
@@ -289,6 +314,10 @@ export class TrayService {
    */
   exists(): boolean {
     return this.tray !== null
+  }
+
+  private t(key: TrayLabelKey): string {
+    return this.labels[key]
   }
 }
 
