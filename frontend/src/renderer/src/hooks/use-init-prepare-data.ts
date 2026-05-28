@@ -58,11 +58,13 @@ const useInitPrepareData = () => {
     },
     { manual: true }
   )
-  const { run: deleteTodoList, data: resetData } = useRequest(
-    async (id: number) => {
+  const { runAsync: deleteTodoList, data: resetData } = useRequest(
+    async (idOrIds: number | number[]) => {
+      const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds]
+      const idSet = new Set(ids)
       const res = await window.screenMonitorAPI.getSettings<TODOActivity[]>('todoList')
       if (res && Array.isArray(res)) {
-        const filteredList = res.filter((item) => item.id !== id)
+        const filteredList = res.filter((item) => !idSet.has(item.id))
         await window.screenMonitorAPI.setSettings('todoList', filteredList)
         if (filteredList.length <= 0) {
           await window.screenMonitorAPI.setSettings('todoList-finished', true)

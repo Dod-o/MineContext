@@ -8,6 +8,7 @@ import {
   Message,
   Modal,
   Popconfirm,
+  Checkbox,
   Radio,
   Select,
   Space,
@@ -16,7 +17,7 @@ import {
   Form,
   Tooltip
 } from '@arco-design/web-react'
-import { IconDelete } from '@arco-design/web-react/icon'
+import { IconClose, IconDelete, IconSelectAll } from '@arco-design/web-react/icon'
 import { Task, useHomeInfo } from '@renderer/hooks/use-home-info'
 import { FC, useEffect, useMemo, useRef, useState } from 'react'
 import taskEmpty from '@renderer/assets/images/task-empty.svg'
@@ -70,9 +71,11 @@ export interface ToDoCardProps {
 const ToDoCard: FC<ToDoCardProps> = (props) => {
   const { selectedDays } = props
   const { tasks, toggleTaskStatus, updateTask, deleteTask, addTask, fetchTasks } = useHomeInfo()
-  const hasTasks = useMemo(() => tasks.length > 0, [tasks])
   const [isTaskHover, setIsTaskHover] = useState<number | null>(null) // Edit task status
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isBatchMode, setIsBatchMode] = useState(false)
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null) // Copied tooltip state
   const { deleteTodoList, data: todoListInitData } = useInitPrepareData()
   const [form] = Form.useForm()
@@ -90,13 +93,28 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       }),
     [tasks]
   )
+  const visibleTasks = useMemo(
+    () => [...(todoListInitData as unknown as Task[]), ...filterDoneTasks],
+    [filterDoneTasks, todoListInitData]
+  )
+  const visibleTaskIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
+  const selectedVisibleTaskIds = useMemo(
+    () => selectedTaskIds.filter((id) => visibleTaskIds.includes(id)),
+    [selectedTaskIds, visibleTaskIds]
+  )
+  const initialTodoIds = useMemo(() => new Set(todoListInitData.map((task) => task.id)), [todoListInitData])
+  const hasTasks = useMemo(() => visibleTasks.length > 0, [visibleTasks])
+  const isAllTasksSelected = hasTasks && selectedVisibleTaskIds.length === visibleTaskIds.length
+  const isSomeTasksSelected = selectedVisibleTaskIds.length > 0 && !isAllTasksSelected
 
   // Handle deleting a task
   const handleDeleteTask = useMemoizedFn(async (taskId: number) => {
     try {
-      await deleteTask(taskId)
-      // TODO: Separate deletion from initial data
-      deleteTodoList(taskId)
+      if (initialTodoIds.has(taskId)) {
+        await deleteTodoList(taskId)
+      } else {
+        await deleteTask(taskId)
+      }
       Message.success('task delete success')
     } catch (error) {
       Message.error('task delete failed')
@@ -122,67 +140,139 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     }
   })
 
-  const renderTask = (task) => (
-    <div
-      key={task.id}
-      className="flex w-full px-6 max-w-[1000px] items-center justify-between rounded-[4px]"
-      onMouseEnter={() => {
-        setIsTaskHover(task.id)
-      }}
-      onMouseLeave={() => {
-        if (!isDeleting) {
-          setIsTaskHover(null)
-        }
-      }}>
-      <div className="gap-2 flex-1 flex items-center">
-        <Radio className="self-start mt-0.5" checked={!!task.status} onClick={() => handleToggleTaskStatus(task)} />
-        <div
-          className={`font-roboto text-sm font-normal text-[#3F3F51] leading-[22px] max-w-[800px] tracking-[0.042px] whitespace-normal break-words ${task.status && 'line-through'}`}
-          onClick={() => handleEditToDoList(task)}>
-          {task.content}
-        </div>
-      </div>
-      <div className={`flex items-center ml-2 gap-3 ${isTaskHover === task.id ? 'opacity-100' : 'opacity-0'}`}>
-        <Tooltip content="Copied!" position="top" popupVisible={copiedTaskId === task.id}>
-          <Button
-            type="text"
-            size="small"
-            className="[&_.arco-btn-size-small]: !w-[14px] !h-[14px]"
-            icon={<img src={copyIcon} alt="copyIcon" className="w-[14px] h-[14px]" />}
-            onClick={() => handleCopyContent(task.content, task.id)}
-            disabled={!!task.status}
-          />
-        </Tooltip>
-        <Popconfirm
-          title="Confirm delete"
-          content="Confirm to delete this todo?"
-          onOk={() => handleDeleteTask(task.id)}
-          onCancel={() => {
-            setIsDeleting(false)
+  const handleToggleBatchMode = useMemoizedFn(() => {
+    if (isBatchMode) {
+      setSelectedTaskIds([])
+    }
+    setIsTaskHover(null)
+    setIsBatchMode(!isBatchMode)
+  })
+
+  const handleSelectTask = useMemoizedFn((taskId: number, checked: boolean) => {
+    setSelectedTaskIds((ids) => {
+      if (checked) {
+        return ids.includes(taskId) ? ids : [...ids, taskId]
+      }
+      return ids.filter((id) => id !== taskId)
+    })
+  })
+
+  const handleSelectAllTasks = useMemoizedFn((checked: boolean) => {
+    setSelectedTaskIds(checked ? visibleTaskIds : [])
+  })
+
+  const handleDeleteSelectedTasks = useMemoizedFn(async () => {
+    const taskIds = selectedVisibleTaskIds.filter((id) => !initialTodoIds.has(id))
+    const initialIds = selectedVisibleTaskIds.filter((id) => initialTodoIds.has(id))
+
+    if (selectedVisibleTaskIds.length === 0) {
+      return
+    }
+
+    try {
+      setIsBatchDeleting(true)
+      if (initialIds.length > 0) {
+        await deleteTodoList(initialIds)
+      }
+      for (const taskId of taskIds) {
+        await deleteTask(taskId)
+      }
+      setSelectedTaskIds([])
+      setIsBatchMode(false)
+      Message.success('tasks delete success')
+    } catch (error) {
+      Message.error('tasks delete failed')
+    } finally {
+      setIsBatchDeleting(false)
+      setIsTaskHover(null)
+    }
+  })
+
+  const renderTask = (task) => {
+    const isSelected = selectedTaskIds.includes(task.id)
+
+    return (
+      <div
+        key={task.id}
+        className={`flex w-full px-6 max-w-[1000px] items-center justify-between rounded-[4px] ${isBatchMode ? 'cursor-pointer' : ''}`}
+        onClick={() => {
+          if (isBatchMode) {
+            handleSelectTask(task.id, !isSelected)
+          }
+        }}
+        onMouseEnter={() => {
+          setIsTaskHover(task.id)
+        }}
+        onMouseLeave={() => {
+          if (!isDeleting) {
             setIsTaskHover(null)
-          }}
-          onVisibleChange={(visible) => {
-            if (!visible) {
-              setIsDeleting(false)
-              setIsTaskHover(null)
-            }
-          }}
-          okText="Confirm"
-          cancelText="Cancel">
-          <Button
-            type="text"
-            size="small"
-            icon={<IconDelete />}
-            className="[&_.arco-btn-size-small]: !w-[13px] !h-[13px]"
-            style={{ color: '#f53f3f' }}
+          }
+        }}>
+        <div className="gap-2 flex-1 flex items-center">
+          {isBatchMode ? (
+            <Checkbox
+              className="self-start mt-0.5"
+              checked={isSelected}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(checked) => handleSelectTask(task.id, checked)}
+            />
+          ) : (
+            <Radio className="self-start mt-0.5" checked={!!task.status} onClick={() => handleToggleTaskStatus(task)} />
+          )}
+          <div
+            className={`font-roboto text-sm font-normal text-[#3F3F51] leading-[22px] max-w-[800px] tracking-[0.042px] whitespace-normal break-words ${task.status && 'line-through'}`}
             onClick={() => {
-              setIsDeleting(true)
-            }}
-          />
-        </Popconfirm>
+              if (!isBatchMode) {
+                handleEditToDoList(task)
+              }
+            }}>
+            {task.content}
+          </div>
+        </div>
+        {!isBatchMode && (
+          <div className={`flex items-center ml-2 gap-3 ${isTaskHover === task.id ? 'opacity-100' : 'opacity-0'}`}>
+            <Tooltip content="Copied!" position="top" popupVisible={copiedTaskId === task.id}>
+              <Button
+                type="text"
+                size="small"
+                className="[&_.arco-btn-size-small]: !w-[14px] !h-[14px]"
+                icon={<img src={copyIcon} alt="copyIcon" className="w-[14px] h-[14px]" />}
+                onClick={() => handleCopyContent(task.content, task.id)}
+                disabled={!!task.status}
+              />
+            </Tooltip>
+            <Popconfirm
+              title="Confirm delete"
+              content="Confirm to delete this todo?"
+              onOk={() => handleDeleteTask(task.id)}
+              onCancel={() => {
+                setIsDeleting(false)
+                setIsTaskHover(null)
+              }}
+              onVisibleChange={(visible) => {
+                if (!visible) {
+                  setIsDeleting(false)
+                  setIsTaskHover(null)
+                }
+              }}
+              okText="Confirm"
+              cancelText="Cancel">
+              <Button
+                type="text"
+                size="small"
+                icon={<IconDelete />}
+                className="[&_.arco-btn-size-small]: !w-[13px] !h-[13px]"
+                style={{ color: '#f53f3f' }}
+                onClick={() => {
+                  setIsDeleting(true)
+                }}
+              />
+            </Popconfirm>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   function buildTodoTree(tasks: Task[]) {
     const rootTitle = (urgency: TaskUrgency) => (
@@ -277,7 +367,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     let id = task.id
 
     if (todoListInitData.some((v) => v.id === task.id)) {
-      deleteTodoList(task.id)
+      await deleteTodoList(task.id)
       id = await addTask({
         content: task.content,
         urgency: task.urgency,
@@ -314,7 +404,7 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
       await form.validate()
       const values = form.getFieldsValue()
       if (todoListInitData.some((v) => v.id === values.id)) {
-        deleteTodoList(values.id)
+        await deleteTodoList(values.id)
         await addTask({
           content: values.content,
           urgency: values.urgency
@@ -353,6 +443,16 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
     }
   }, [selectedDays])
 
+  useEffect(() => {
+    setSelectedTaskIds((ids) => {
+      const nextIds = ids.filter((id) => visibleTaskIds.includes(id))
+      return nextIds.length === ids.length ? ids : nextIds
+    })
+    if (visibleTaskIds.length === 0) {
+      setIsBatchMode(false)
+    }
+  }, [visibleTaskIds])
+
   return (
     <>
       <Card
@@ -372,7 +472,18 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
                 today
               </div>
             </Space>
-            <img src={addIcon} alt="" onClick={handleCreateToDoList} className="cursor-pointer" />
+            <div className="flex items-center gap-2">
+              {hasTasks && (
+                <Button
+                  type={isBatchMode ? 'secondary' : 'text'}
+                  size="mini"
+                  icon={isBatchMode ? <IconClose /> : <IconSelectAll />}
+                  onClick={handleToggleBatchMode}>
+                  {isBatchMode ? 'Cancel' : 'Batch'}
+                </Button>
+              )}
+              <img src={addIcon} alt="" onClick={handleCreateToDoList} className="cursor-pointer" />
+            </div>
           </div>
         }
         bodyStyle={{
@@ -385,7 +496,35 @@ const ToDoCard: FC<ToDoCardProps> = (props) => {
         }}>
         <div className={`flex h-[340px] max-h-[340px] flex-col gap-4 self-stretch`}>
           {hasTasks ? (
-            <div>{buildTodoTree([...(todoListInitData as any), ...filterDoneTasks])}</div>
+            <>
+              {isBatchMode && (
+                <div className="flex items-center justify-between gap-3 px-6 py-1 border-b border-[#E1E3EF]">
+                  <Checkbox
+                    checked={isAllTasksSelected}
+                    indeterminate={isSomeTasksSelected}
+                    onChange={handleSelectAllTasks}>
+                    {selectedVisibleTaskIds.length}/{visibleTaskIds.length}
+                  </Checkbox>
+                  <Popconfirm
+                    title="Confirm delete"
+                    content="Confirm to delete selected todos?"
+                    onOk={handleDeleteSelectedTasks}
+                    okText="Confirm"
+                    cancelText="Cancel">
+                    <Button
+                      type="text"
+                      size="mini"
+                      status="danger"
+                      icon={<IconDelete />}
+                      disabled={selectedVisibleTaskIds.length === 0}
+                      loading={isBatchDeleting}>
+                      Delete
+                    </Button>
+                  </Popconfirm>
+                </div>
+              )}
+              <div>{buildTodoTree(visibleTasks)}</div>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center pt-[60px] pb-[60px] text-center">
               <img src={taskEmpty} alt="empty" className="w-20 h-20 mb-4" />
