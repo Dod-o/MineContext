@@ -196,6 +196,8 @@ class ConfigManager:
                 user_settings["vlm_model"] = settings["vlm_model"]
             if "embedding_model" in settings:
                 user_settings["embedding_model"] = settings["embedding_model"]
+            if "model_profiles" in settings:
+                user_settings["model_profiles"] = settings["model_profiles"]
             if "content_generation" in settings:
                 user_settings["content_generation"] = settings["content_generation"]
             if "capture" in settings:

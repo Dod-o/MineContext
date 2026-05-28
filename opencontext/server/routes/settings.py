@@ -6,8 +6,10 @@
 
 """Model settings API routes"""
 
+from datetime import datetime, timezone
 import io
 import threading
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import StreamingResponse
@@ -16,7 +18,7 @@ from pydantic import BaseModel, Field
 from opencontext.config.global_config import GlobalConfig
 from opencontext.llm.global_embedding_client import GlobalEmbeddingClient
 from opencontext.llm.global_vlm_client import GlobalVLMClient
-from opencontext.llm.llm_client import LLMClient, LLMType
+from opencontext.llm.llm_client import LLMClient, LLMProvider, LLMType
 from opencontext.server.middleware.auth import auth_dependency
 from opencontext.server.utils import convert_resp
 from opencontext.utils.image_storage import (
@@ -60,6 +62,20 @@ class UpdateModelSettingsResponse(BaseModel):
     message: str
 
 
+class ModelProfileVO(BaseModel):
+    name: str
+    config: ModelSettingsVO
+    updated_at: str | None = None
+
+
+class GetModelProfilesResponse(BaseModel):
+    profiles: list[ModelProfileVO]
+
+
+class DeleteModelProfileRequest(BaseModel):
+    name: str
+
+
 class ImageStorageCleanupRequest(BaseModel):
     """Manual local image storage cleanup request."""
 
@@ -97,6 +113,40 @@ def _get_image_retention_config(config: dict) -> dict:
     )
 
 
+def _model_profile_name(config: ModelSettingsVO) -> str:
+    platform = config.modelPlatform or "custom"
+    model = config.modelId or "model"
+    base_url = config.baseUrl or ""
+    parsed_url = urlparse(base_url)
+    base_label = parsed_url.netloc or base_url.rstrip("/")
+    return f"{platform} / {model} / {base_label}" if base_label else f"{platform} / {model}"
+
+
+def _get_model_profiles(config: dict) -> list[ModelProfileVO]:
+    profiles = []
+    for item in config.get("model_profiles", []) or []:
+        try:
+            profiles.append(ModelProfileVO.model_validate(item))
+        except Exception as e:
+            logger.warning(f"Skipping invalid model profile: {e}")
+    return profiles
+
+
+def _upsert_model_profile(
+    profiles: list[ModelProfileVO], model_config: ModelSettingsVO
+) -> list[dict]:
+    profile_name = _model_profile_name(model_config)
+    profile_data = ModelProfileVO(
+        name=profile_name,
+        config=model_config,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    profile_key = profile_name.casefold()
+    merged = [profile for profile in profiles if profile.name.casefold() != profile_key]
+    merged.insert(0, profile_data)
+    return [profile.model_dump() for profile in merged[:20]]
+
+
 # ==================== API Endpoints ====================
 
 
@@ -127,6 +177,55 @@ async def get_model_settings(_auth: str = auth_dependency):
     except Exception as e:
         logger.exception(f"Failed to get model settings: {e}")
         return convert_resp(code=500, status=500, message=f"获取模型设置失败: {str(e)}")
+
+
+@router.get("/api/model_settings/profiles")
+async def get_model_profiles(_auth: str = auth_dependency):
+    """Get saved model configuration profiles."""
+    try:
+        config = GlobalConfig.get_instance().get_config()
+        if not config:
+            return convert_resp(code=500, status=500, message="Configuration not initialized")
+
+        profiles = _get_model_profiles(config)
+        return convert_resp(
+            data=GetModelProfilesResponse(profiles=profiles).model_dump()
+        )
+    except Exception as e:
+        logger.exception(f"Failed to get model profiles: {e}")
+        return convert_resp(code=500, status=500, message=f"Failed to get model profiles: {str(e)}")
+
+
+@router.post("/api/model_settings/profiles/delete")
+async def delete_model_profile(request: DeleteModelProfileRequest, _auth: str = auth_dependency):
+    """Delete a saved model configuration profile."""
+    with _config_lock:
+        try:
+            config_mgr = GlobalConfig.get_instance().get_config_manager()
+            if not config_mgr:
+                return convert_resp(code=500, status=500, message="Config manager not initialized")
+
+            config = GlobalConfig.get_instance().get_config() or {}
+            profile_key = request.name.casefold()
+            current_profiles = _get_model_profiles(config)
+            profiles = [
+                profile for profile in current_profiles
+                if profile.name.casefold() != profile_key
+            ]
+            if len(profiles) == len(current_profiles):
+                return convert_resp(code=404, status=404, message="Model profile not found")
+
+            if not config_mgr.save_user_settings(
+                {"model_profiles": [profile.model_dump() for profile in profiles]}
+            ):
+                return convert_resp(code=500, status=500, message="Failed to save profiles")
+            config_mgr.load_config(config_mgr.get_config_path())
+            return convert_resp(message="Model profile deleted")
+        except Exception as e:
+            logger.exception(f"Failed to delete model profile: {e}")
+            return convert_resp(
+                code=500, status=500, message=f"Failed to delete model profile: {str(e)}"
+            )
 
 
 @router.post("/api/model_settings/update")
@@ -186,11 +285,16 @@ async def update_model_settings(request: UpdateModelSettingsRequest, _auth: str 
                 emb_url, emb_key, cfg.embeddingModelId, emb_provider, LLMType.EMBEDDING
             )
 
-            new_settings = {"vlm_model": vlm_config_save, "embedding_model": emb_config_save}
-
             config_mgr = GlobalConfig.get_instance().get_config_manager()
             if not config_mgr:
                 return convert_resp(code=500, status=500, message="Config manager not initialized")
+
+            existing_profiles = _get_model_profiles(GlobalConfig.get_instance().get_config() or {})
+            new_settings = {
+                "vlm_model": vlm_config_save,
+                "embedding_model": emb_config_save,
+                "model_profiles": _upsert_model_profile(existing_profiles, cfg),
+            }
 
             if not config_mgr.save_user_settings(new_settings):
                 return convert_resp(code=500, status=500, message="Failed to save settings")

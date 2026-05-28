@@ -52,6 +52,20 @@
             <div class="row mt-4">
                 <div class="col-md-8">
                     <h4>LLM 模型配置</h4>
+                    <div class="border rounded p-3 mb-3">
+                        <label for="modelProfileSelect" class="form-label">已保存模型配置</label>
+                        <div class="d-flex gap-2">
+                            <select class="form-select" id="modelProfileSelect">
+                                <option value="">暂无已保存配置</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-primary" onclick="applySelectedModelProfile()">
+                                <i class="bi bi-arrow-left-right"></i> 切换
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="deleteSelectedModelProfile()">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
                     <form id="modelForm">
                         <div class="mb-3">
                             <label for="modelPlatform" class="form-label">模型平台</label>

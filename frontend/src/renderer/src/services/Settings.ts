@@ -21,6 +21,12 @@ export interface ModelInfoResponseData {
   config: ModelConfigProps
 }
 
+export interface ModelProfileProps {
+  name: string
+  config: ModelConfigProps
+  updated_at?: string
+}
+
 // Complete API response structure
 export interface ApiResponse<T> {
   code: number
@@ -33,6 +39,15 @@ export interface ApiResponse<T> {
 export const getModelInfo = async (): Promise<ModelInfoResponseData | undefined> => {
   const res = await axiosInstance.get<ModelInfoResponseData>('/api/model_settings/get')
   return get(res, 'data.data')
+}
+
+export const getModelProfilesAPI = async (): Promise<ModelProfileProps[]> => {
+  const res = await axiosInstance.get('/api/model_settings/profiles')
+  return get(res, 'data.data.profiles') || []
+}
+
+export const deleteModelProfileAPI = async (name: string): Promise<void> => {
+  await axiosInstance.post('/api/model_settings/profiles/delete', { name })
 }
 
 // Update model settings information

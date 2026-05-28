@@ -3,6 +3,7 @@
 let currentPrompts = {};
 let currentGeneralSettings = {};
 let selectedPromptKey = '';
+let modelProfiles = [];
 
 const NON_PROMPT_TOP_LEVEL_KEYS = new Set([
     'api_auth',
@@ -568,6 +569,119 @@ async function resetAllSettings() {
 
 // ==================== 模型配置 ====================
 
+function collectModelSettingsPayload() {
+    const useSeparate = document.getElementById('separateEmbedding').checked;
+    return {
+        config: {
+            modelPlatform: document.getElementById('modelPlatform').value,
+            modelId: document.getElementById('modelId').value,
+            baseUrl: document.getElementById('baseUrl').value,
+            apiKey: document.getElementById('apiKey').value,
+            embeddingModelId: document.getElementById('embeddingModelId').value,
+            embeddingBaseUrl: useSeparate ? document.getElementById('embeddingBaseUrl').value : null,
+            embeddingApiKey: useSeparate ? document.getElementById('embeddingApiKey').value : null,
+            embeddingModelPlatform: useSeparate ? document.getElementById('embeddingModelPlatform').value : null
+        }
+    };
+}
+
+function fillModelSettingsForm(config) {
+    document.getElementById('modelPlatform').value = config.modelPlatform || '';
+    document.getElementById('modelId').value = config.modelId || '';
+    document.getElementById('baseUrl').value = config.baseUrl || '';
+    document.getElementById('apiKey').value = config.apiKey || '';
+    document.getElementById('embeddingModelId').value = config.embeddingModelId || '';
+
+    const hasSeparateConfig = config.embeddingBaseUrl || config.embeddingApiKey || config.embeddingModelPlatform;
+    document.getElementById('separateEmbedding').checked = Boolean(hasSeparateConfig);
+    document.getElementById('embeddingModelPlatform').value = config.embeddingModelPlatform || '';
+    document.getElementById('embeddingBaseUrl').value = config.embeddingBaseUrl || '';
+    document.getElementById('embeddingApiKey').value = config.embeddingApiKey || '';
+    toggleEmbeddingConfig();
+}
+
+async function loadModelProfiles() {
+    try {
+        const response = await fetch('/api/model_settings/profiles');
+        const data = await response.json();
+        if (data.code !== 0 || !data.data) {
+            return;
+        }
+
+        modelProfiles = data.data.profiles || [];
+        const profileSelect = document.getElementById('modelProfileSelect');
+        profileSelect.innerHTML = '';
+        if (modelProfiles.length === 0) {
+            profileSelect.innerHTML = '<option value="">暂无已保存配置</option>';
+            return;
+        }
+
+        profileSelect.appendChild(new Option('选择一个历史配置', ''));
+        modelProfiles.forEach(profile => {
+            profileSelect.appendChild(new Option(profile.name, profile.name));
+        });
+    } catch (error) {
+        console.error('加载模型配置历史失败:', error);
+    }
+}
+
+async function applySelectedModelProfile() {
+    const profileName = document.getElementById('modelProfileSelect').value;
+    const profile = modelProfiles.find(item => item.name === profileName);
+    if (!profile) {
+        showToast('请选择一个模型配置', true);
+        return;
+    }
+
+    fillModelSettingsForm(profile.config);
+    try {
+        const response = await fetch('/api/model_settings/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: profile.config })
+        });
+        const data = await response.json();
+        if (data.code === 0) {
+            showToast('模型配置已切换');
+            await loadModelProfiles();
+        } else {
+            showToast('切换失败: ' + (data.message || '未知错误'), true);
+        }
+    } catch (error) {
+        console.error('切换模型配置失败:', error);
+        showToast('切换失败', true);
+    }
+}
+
+async function deleteSelectedModelProfile() {
+    const profileName = document.getElementById('modelProfileSelect').value;
+    if (!profileName) {
+        showToast('请选择一个模型配置', true);
+        return;
+    }
+    if (!confirm(`确定删除模型配置 "${profileName}" 吗？`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/model_settings/profiles/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: profileName })
+        });
+        const data = await response.json();
+        if (data.code === 0) {
+            showToast('模型配置已删除');
+            await loadModelProfiles();
+        } else {
+            showToast('删除失败: ' + (data.message || '未知错误'), true);
+        }
+    } catch (error) {
+        console.error('删除模型配置失败:', error);
+        showToast('删除失败', true);
+    }
+}
+
 async function loadModelSettings() {
     try {
         const response = await fetch('/api/model_settings/get');
@@ -575,27 +689,9 @@ async function loadModelSettings() {
 
         if (data.code === 0 && data.data && data.data.config) {
             const config = data.data.config;
-
-            // Fill VLM configuration
-            document.getElementById('modelPlatform').value = config.modelPlatform || '';
-            document.getElementById('modelId').value = config.modelId || '';
-            document.getElementById('baseUrl').value = config.baseUrl || '';
-            document.getElementById('apiKey').value = config.apiKey || '';
-
-            // Fill Embedding configuration
-            document.getElementById('embeddingModelId').value = config.embeddingModelId || '';
-
-            // Check if using separate embedding configuration
-            const hasSeparateConfig = config.embeddingBaseUrl || config.embeddingApiKey || config.embeddingModelPlatform;
-
-            if (hasSeparateConfig) {
-                document.getElementById('separateEmbedding').checked = true;
-                document.getElementById('embeddingModelPlatform').value = config.embeddingModelPlatform || '';
-                document.getElementById('embeddingBaseUrl').value = config.embeddingBaseUrl || '';
-                document.getElementById('embeddingApiKey').value = config.embeddingApiKey || '';
-                toggleEmbeddingConfig();
-            }
+            fillModelSettingsForm(config);
         }
+        await loadModelProfiles();
     } catch (error) {
         console.error('加载模型设置失败:', error);
         showToast('加载模型设置失败', true);
@@ -612,21 +708,7 @@ async function validateModelConfig() {
     try {
         showToast('正在测试连接...', false);
 
-        // Collect current configuration from the form
-        const useSeparate = document.getElementById('separateEmbedding').checked;
-
-        const settings = {
-            config: {
-                modelPlatform: document.getElementById('modelPlatform').value,
-                modelId: document.getElementById('modelId').value,
-                baseUrl: document.getElementById('baseUrl').value,
-                apiKey: document.getElementById('apiKey').value,
-                embeddingModelId: document.getElementById('embeddingModelId').value,
-                embeddingBaseUrl: useSeparate ? document.getElementById('embeddingBaseUrl').value : null,
-                embeddingApiKey: useSeparate ? document.getElementById('embeddingApiKey').value : null,
-                embeddingModelPlatform: useSeparate ? document.getElementById('embeddingModelPlatform').value : null
-            }
-        };
+        const settings = collectModelSettingsPayload();
 
         const response = await fetch('/api/model_settings/validate', {
             method: 'POST',
@@ -650,20 +732,7 @@ async function validateModelConfig() {
 document.getElementById('modelForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const useSeparate = document.getElementById('separateEmbedding').checked;
-
-    const settings = {
-        config: {
-            modelPlatform: document.getElementById('modelPlatform').value,
-            modelId: document.getElementById('modelId').value,
-            baseUrl: document.getElementById('baseUrl').value,
-            apiKey: document.getElementById('apiKey').value,
-            embeddingModelId: document.getElementById('embeddingModelId').value,
-            embeddingBaseUrl: useSeparate ? document.getElementById('embeddingBaseUrl').value : null,
-            embeddingApiKey: useSeparate ? document.getElementById('embeddingApiKey').value : null,
-            embeddingModelPlatform: useSeparate ? document.getElementById('embeddingModelPlatform').value : null
-        }
-    };
+    const settings = collectModelSettingsPayload();
 
     try {
         const response = await fetch('/api/model_settings/update', {
@@ -675,6 +744,7 @@ document.getElementById('modelForm')?.addEventListener('submit', async (e) => {
 
         if (data.code === 0) {
             showToast('模型配置保存成功');
+            await loadModelProfiles();
         } else {
             showToast('保存失败: ' + (data.message || '未知错误'), true);
         }

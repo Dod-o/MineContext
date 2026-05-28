@@ -7,7 +7,14 @@ import { find, get, isEmpty, pick } from 'lodash'
 
 import ModelRadio from './components/modelRadio/model-radio'
 import { ModelTypeList, BaseUrl, embeddingModels, ModelInfoList } from './constants'
-import { getModelInfo, ModelConfigProps, updateModelSettingsAPI } from '../../services/Settings'
+import {
+  deleteModelProfileAPI,
+  getModelInfo,
+  getModelProfilesAPI,
+  ModelConfigProps,
+  ModelProfileProps,
+  updateModelSettingsAPI
+} from '../../services/Settings'
 import { useMemoizedFn, useMount, useRequest } from 'ahooks'
 
 const FormItem = Form.Item
@@ -194,27 +201,39 @@ export interface SettingsFormBase {
   modelPlatform: string
 }
 
-export type SettingsFormProps = SettingsFormBase & {
-  [K in ModelTypeList as `${K}-modelId` | `${K}-apiKey`]?: string
-} & {
-  [K in
-    | `${ModelTypeList.Custom}-embeddingModelId`
-    | `${ModelTypeList.Custom}-embeddingBaseUrl`
-    | `${ModelTypeList.Custom}-embeddingApiKey`]?: string
-}
+type ModelConfigField =
+  | 'modelId'
+  | 'apiKey'
+  | 'baseUrl'
+  | 'embeddingModelId'
+  | 'embeddingBaseUrl'
+  | 'embeddingApiKey'
+
+export type SettingsFormProps = SettingsFormBase &
+  Partial<Record<`${ModelTypeList}-${ModelConfigField}`, string>>
+
 const Settings: FC<SettingsProps> = (props) => {
   const { closeSetting, init } = props
 
   const [form] = Form.useForm<SettingsFormProps>()
   const [launchOnBoot, setLaunchOnBoot] = useState(false)
   const [launchOnBootLoading, setLaunchOnBootLoading] = useState(false)
+  const [modelProfiles, setModelProfiles] = useState<ModelProfileProps[]>([])
+  const [selectedProfileName, setSelectedProfileName] = useState<string>()
   const { run: getInfo, loading: getInfoLoading, data: modelInfo } = useRequest(getModelInfo, { manual: true })
+  const { run: getProfiles } = useRequest(getModelProfilesAPI, {
+    manual: true,
+    onSuccess(data) {
+      setModelProfiles(data || [])
+    }
+  })
 
   const { run: updateModelSettings, loading: updateLoading } = useRequest(updateModelSettingsAPI, {
     manual: true,
     onSuccess() {
       Message.success('Your API key saved successfully')
       getInfo()
+      getProfiles()
       if (init) {
         closeSetting?.()
       }
@@ -241,6 +260,44 @@ const Settings: FC<SettingsProps> = (props) => {
     }
     return firstFieldError?.message || 'Please complete the required model settings'
   }
+
+  const setFormFromConfig = useMemoizedFn((config: ModelConfigProps) => {
+    if (!config?.modelPlatform) return
+
+    const prefix = config.modelPlatform as ModelTypeList
+    form.setFieldsValue({
+      modelPlatform: prefix,
+      [`${prefix}-modelId`]: config.modelId,
+      [`${prefix}-apiKey`]: config.apiKey,
+      [`${prefix}-baseUrl`]: config.baseUrl,
+      [`${prefix}-embeddingModelId`]: config.embeddingModelId,
+      [`${prefix}-embeddingBaseUrl`]: config.embeddingBaseUrl,
+      [`${prefix}-embeddingApiKey`]: config.embeddingApiKey
+    } as SettingsFormProps)
+  })
+
+  const switchModelProfile = useMemoizedFn((profileName: string) => {
+    setSelectedProfileName(profileName)
+    const profile = modelProfiles.find((item) => item.name === profileName)
+    if (!profile) return
+    setFormFromConfig(profile.config)
+    updateModelSettings(profile.config)
+  })
+
+  const deleteSelectedProfile = useMemoizedFn(async () => {
+    if (!selectedProfileName) return
+    if (!window.confirm(`Delete saved model profile "${selectedProfileName}"?`)) return
+
+    try {
+      await deleteModelProfileAPI(selectedProfileName)
+      Message.success('Model profile deleted')
+      setSelectedProfileName(undefined)
+      getProfiles()
+    } catch (error: any) {
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to delete profile')
+    }
+  })
+
   const submit = useMemoizedFn(async () => {
     try {
       await form.validate()
@@ -282,6 +339,7 @@ const Settings: FC<SettingsProps> = (props) => {
 
   useMount(() => {
     getInfo()
+    getProfiles()
     ;(async () => {
       try {
         const enabled = await window.api.getLaunchOnBoot()
@@ -307,18 +365,9 @@ const Settings: FC<SettingsProps> = (props) => {
   useEffect(() => {
     const config = get(modelInfo, 'config')
     if (!getInfoLoading && !isEmpty(config) && !init) {
-      const settingsValue = new Map<keyof SettingsFormProps, string>()
-      const prefix = config.modelPlatform as ModelTypeList
-      settingsValue.set(`modelPlatform`, prefix)
-      Object.keys(config).reduce((acc, key) => {
-        if (!acc.has(`${prefix}-${key}` as keyof SettingsFormProps) && !!config[key]) {
-          acc.set(`${prefix}-${key}` as keyof SettingsFormProps, config[key])
-        }
-        return acc
-      }, settingsValue)
-      form.setFieldsValue(Object.fromEntries(settingsValue))
+      setFormFromConfig(config)
     }
-  }, [modelInfo, getInfoLoading])
+  }, [modelInfo, getInfoLoading, setFormFromConfig])
 
   return (
     <Spin loading={getInfoLoading} block className="[&_.arco-spin-children]:!h-full !h-full">
@@ -341,6 +390,26 @@ const Settings: FC<SettingsProps> = (props) => {
                   </div>
                 </div>
                 <Switch checked={launchOnBoot} loading={launchOnBootLoading} onChange={handleLaunchOnBootChange} />
+              </div>
+            )}
+            {!init && modelProfiles.length > 0 && (
+              <div className="mb-6 w-[574px] border-b border-[#E5E6EB] pb-4">
+                <div className="mb-2 text-[14px] leading-[20px] text-[#0B0B0F]">Saved model profiles</div>
+                <div className="flex gap-2">
+                  <Select
+                    placeholder="Switch to a previously saved model"
+                    value={selectedProfileName}
+                    options={modelProfiles.map((profile) => ({
+                      value: profile.name,
+                      label: profile.name
+                    }))}
+                    onChange={(value) => switchModelProfile(value as string)}
+                    className="flex-1"
+                  />
+                  <Button disabled={!selectedProfileName} onClick={deleteSelectedProfile}>
+                    Delete
+                  </Button>
+                </div>
               </div>
             )}
             <Form
