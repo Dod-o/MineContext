@@ -31,6 +31,7 @@ import { autoUpdater } from 'electron-updater'
 import { IpcChannel } from '@shared/IpcChannel'
 import { LatestActivityTask } from './background/task/latest-activity'
 import { themeService } from './services/ThemeService'
+import { proxyConfigFromRuntimeSettings, proxyManager } from './services/ProxyManager'
 
 initLog()
 app.setName('MineContext')
@@ -193,7 +194,7 @@ function createWindow() {
 let server: any
 const task = new ScreenMonitorTask()
 const latestActivityTask = new LatestActivityTask()
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   logger.info('app_started', { argv: process.argv, version: app.getVersion() })
   monitor.start(5000)
   protocol.registerBufferProtocol('vikingdb', (request, callback) => {
@@ -273,6 +274,12 @@ app.whenReady().then(() => {
   })
 
   themeService.init()
+  try {
+    await proxyManager.configureProxy(proxyConfigFromRuntimeSettings(appRuntimeSettingsService.getSettings()))
+  } catch (error) {
+    logger.error('Failed to apply proxy settings at startup', error as Error)
+  }
+
   const mainWindow = createWindow()
   openInspector(mainWindow)
   powerWatcher.run()

@@ -20,7 +20,7 @@ import { appRuntimeSettingsService } from './services/AppRuntimeSettingsService'
 import { fileStorage as fileManager } from './services/FileStorage'
 // import FileService from './services/FileSystemService'
 import { NotificationService } from './services/NotificationService'
-import { proxyManager } from './services/ProxyManager'
+import { proxyConfigFromRuntimeSettings, proxyManager } from './services/ProxyManager'
 import storeSyncService from './services/StoreSyncService'
 import db from './services/DatabaseService'
 import { getBackendPort, getBackendStatus } from './backend'
@@ -116,9 +116,11 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.App_GetTheme, () => themeService.getTheme())
   ipcMain.handle(IpcChannel.App_SetTheme, (_, mode: ThemeMode) => themeService.setTheme(mode))
   ipcMain.handle(IpcChannel.App_GetRuntimeSettings, () => appRuntimeSettingsService.getSettings())
-  ipcMain.handle(IpcChannel.App_SetRuntimeSettings, (_, settings: Partial<AppRuntimeSettings>) =>
-    appRuntimeSettingsService.setSettings(settings)
-  )
+  ipcMain.handle(IpcChannel.App_SetRuntimeSettings, async (_, settings: Partial<AppRuntimeSettings>) => {
+    const nextSettings = await appRuntimeSettingsService.setSettings(settings)
+    await proxyManager.configureProxy(proxyConfigFromRuntimeSettings(nextSettings))
+    return nextSettings
+  })
 
   //only for mac
   if (isMac) {

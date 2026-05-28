@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getLogger } from '@shared/logger/main'
+import type { AppRuntimeSettings } from '@shared/app-runtime-settings'
 import axios from 'axios'
 import { app, ProxyConfig, session } from 'electron'
 import { socksDispatcher } from 'fetch-socks'
@@ -20,6 +21,22 @@ const isByPass = (hostname: string) => {
   }
 
   return byPassRules.includes(hostname)
+}
+
+export function proxyConfigFromRuntimeSettings(settings: AppRuntimeSettings): ProxyConfig {
+  if (settings.proxyMode === 'direct') {
+    return { mode: 'direct' }
+  }
+
+  if (settings.proxyMode === 'custom' && settings.proxyUrl) {
+    return {
+      mode: 'fixed_servers',
+      proxyRules: settings.proxyUrl,
+      proxyBypassRules: settings.proxyBypassRules
+    }
+  }
+
+  return { mode: 'system' }
 }
 
 class SelectiveDispatcher extends Dispatcher {

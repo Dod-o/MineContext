@@ -11,6 +11,7 @@ import {
   defaultAppRuntimeSettings,
   MAX_BACKEND_START_PORT,
   MIN_BACKEND_START_PORT,
+  type AppProxyMode,
   type AppRuntimeSettings
 } from '@shared/app-runtime-settings'
 
@@ -798,11 +799,16 @@ const Settings: FC<SettingsProps> = (props) => {
   })
 
   const handleSaveRuntimeSettings = useMemoizedFn(async () => {
+    if (runtimeSettings.proxyMode === 'custom' && !runtimeSettings.proxyUrl.trim()) {
+      Message.error('Enter a proxy server URL')
+      return
+    }
+
     setRuntimeSettingsSaving(true)
     try {
       const nextSettings = await window.api.setRuntimeSettings(runtimeSettings)
       setRuntimeSettings(nextSettings)
-      Message.success('Local storage settings saved')
+      Message.success('App settings saved')
       if (currentBackendPort && nextSettings.backendStartPort !== currentBackendPort) {
         Message.info(`Backend port changes take effect after app restart. Current port: ${currentBackendPort}`)
       }
@@ -899,6 +905,80 @@ const Settings: FC<SettingsProps> = (props) => {
                     {updateDownloading ? 'Downloading' : 'Check'}
                   </Button>
                 )}
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Network proxy</div>
+                    <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                      Choose direct, system, or custom proxy routing for app network requests.
+                    </div>
+                  </div>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<IconSave />}
+                    loading={runtimeSettingsSaving}
+                    onClick={handleSaveRuntimeSettings}>
+                    Save
+                  </Button>
+                </div>
+                <div className="mb-3">
+                  <Radio.Group
+                    type="button"
+                    value={runtimeSettings.proxyMode}
+                    onChange={(value) =>
+                      setRuntimeSettings((settings) => ({
+                        ...settings,
+                        proxyMode: value as AppProxyMode
+                      }))
+                    }>
+                    <Radio value="system">System</Radio>
+                    <Radio value="direct">Direct</Radio>
+                    <Radio value="custom">Custom</Radio>
+                  </Radio.Group>
+                </div>
+                {runtimeSettings.proxyMode === 'custom' && (
+                  <>
+                    <div className="mb-3">
+                      <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                        Proxy server
+                      </div>
+                      <Input
+                        value={runtimeSettings.proxyUrl}
+                        placeholder="http://127.0.0.1:7890"
+                        allowClear
+                        onChange={(value) =>
+                          setRuntimeSettings((settings) => ({
+                            ...settings,
+                            proxyUrl: value
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                        Bypass hosts
+                      </div>
+                      <Input
+                        value={runtimeSettings.proxyBypassRules}
+                        placeholder={defaultAppRuntimeSettings.proxyBypassRules}
+                        allowClear
+                        onChange={(value) =>
+                          setRuntimeSettings((settings) => ({
+                            ...settings,
+                            proxyBypassRules: value
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                  Proxy changes apply immediately after saving.
+                </div>
               </div>
             )}
             {!init && (
