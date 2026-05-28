@@ -24,11 +24,14 @@ import {
   getGeneralSettingsAPI,
   getModelInfo,
   getModelProfilesAPI,
+  getPromptLanguageAPI,
   getPromptsAPI,
   ModelConfigProps,
   ModelProfileProps,
+  PromptLanguage,
   PromptsConfigProps,
   updateGeneralSettingsAPI,
+  updatePromptLanguageAPI,
   updatePromptsAPI,
   updateModelSettingsAPI
 } from '../../services/Settings'
@@ -439,6 +442,8 @@ const Settings: FC<SettingsProps> = (props) => {
   const [launchOnBootLoading, setLaunchOnBootLoading] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [themeLoading, setThemeLoading] = useState(false)
+  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>('en')
+  const [promptLanguageLoading, setPromptLanguageLoading] = useState(false)
   const [runtimeSettings, setRuntimeSettings] = useState<AppRuntimeSettings>(defaultAppRuntimeSettings)
   const [runtimeSettingsSaving, setRuntimeSettingsSaving] = useState(false)
   const [currentBackendPort, setCurrentBackendPort] = useState<number>()
@@ -636,6 +641,38 @@ const Settings: FC<SettingsProps> = (props) => {
     }
   })
 
+  const loadPromptLanguage = useMemoizedFn(async () => {
+    setPromptLanguageLoading(true)
+    try {
+      const language = await getPromptLanguageAPI()
+      setPromptLanguage(language)
+      await window.api.setLanguage(language)
+    } catch (error: any) {
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to load language setting')
+    } finally {
+      setPromptLanguageLoading(false)
+    }
+  })
+
+  const handlePromptLanguageChange = useMemoizedFn(async (language: PromptLanguage) => {
+    if (language === promptLanguage) {
+      return
+    }
+
+    setPromptLanguageLoading(true)
+    try {
+      await updatePromptLanguageAPI(language)
+      await window.api.setLanguage(language)
+      setPromptLanguage(language)
+      await loadPrompts()
+      Message.success(`Language switched to ${language === 'zh' ? 'Chinese' : 'English'}`)
+    } catch (error: any) {
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to update language setting')
+    } finally {
+      setPromptLanguageLoading(false)
+    }
+  })
+
   const updateContentGenerationInterval = useMemoizedFn(
     (key: GenerationIntervalKey, patch: Partial<ContentGenerationIntervalConfigProps>) => {
       const option = GENERATION_INTERVAL_OPTIONS.find((item) => item.key === key)
@@ -676,6 +713,7 @@ const Settings: FC<SettingsProps> = (props) => {
     getInfo()
     getProfiles()
     if (!init) {
+      loadPromptLanguage()
       loadPrompts()
       loadContentGenerationSettings()
     }
@@ -876,6 +914,25 @@ const Settings: FC<SettingsProps> = (props) => {
                     <Radio value="system">System</Radio>
                     <Radio value="light">Light</Radio>
                     <Radio value="dark">Dark</Radio>
+                  </Radio.Group>
+                </Spin>
+              </div>
+            )}
+            {!init && (
+              <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
+                <div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Language</div>
+                  <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                    Keep prompts and the tray menu in the same language.
+                  </div>
+                </div>
+                <Spin loading={promptLanguageLoading}>
+                  <Radio.Group
+                    type="button"
+                    value={promptLanguage}
+                    onChange={(value) => handlePromptLanguageChange(value as PromptLanguage)}>
+                    <Radio value="en">English</Radio>
+                    <Radio value="zh">中文</Radio>
                   </Radio.Group>
                 </Spin>
               </div>

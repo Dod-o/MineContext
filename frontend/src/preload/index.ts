@@ -10,7 +10,7 @@ import { Notification } from 'src/renderer/src/types/notification'
 import { serverPushAPI } from './server-push-api'
 import { CaptureSource } from '@interface/common/source'
 import type { ThemeMode, ThemeState } from '@shared/theme'
-import type { AppRuntimeSettings } from '@shared/app-runtime-settings'
+import type { AppLanguage, AppRuntimeSettings } from '@shared/app-runtime-settings'
 
 import { VaultDocumentType } from '@shared/enums/global-enum'
 import type { ScreenSettings } from '@shared/screen-settings'
@@ -45,6 +45,7 @@ const api = {
   cancelDownload: () => ipcRenderer.invoke(IpcChannel.App_CancelDownload),
   getTheme: (): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_GetTheme),
   setTheme: (mode: ThemeMode): Promise<ThemeState> => ipcRenderer.invoke(IpcChannel.App_SetTheme, mode),
+  setLanguage: (language: AppLanguage): Promise<AppLanguage> => ipcRenderer.invoke(IpcChannel.App_SetLanguage, language),
   getRuntimeSettings: (): Promise<AppRuntimeSettings> => ipcRenderer.invoke(IpcChannel.App_GetRuntimeSettings),
   setRuntimeSettings: (settings: Partial<AppRuntimeSettings>): Promise<AppRuntimeSettings> =>
     ipcRenderer.invoke(IpcChannel.App_SetRuntimeSettings, settings),

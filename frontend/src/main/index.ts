@@ -274,8 +274,9 @@ app.whenReady().then(async () => {
   })
 
   themeService.init()
+  const runtimeSettings = appRuntimeSettingsService.getSettings()
   try {
-    await proxyManager.configureProxy(proxyConfigFromRuntimeSettings(appRuntimeSettingsService.getSettings()))
+    await proxyManager.configureProxy(proxyConfigFromRuntimeSettings(runtimeSettings))
   } catch (error) {
     logger.error('Failed to apply proxy settings at startup', error as Error)
   }
@@ -286,7 +287,7 @@ app.whenReady().then(async () => {
   startBackendInBackground(mainWindow)
 
   // Initialize tray service
-  trayService = new TrayService(mainWindow)
+  trayService = new TrayService(mainWindow, runtimeSettings.language)
   trayService.create()
   logger.info('Tray service initialized')
 

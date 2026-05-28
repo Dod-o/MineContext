@@ -28,6 +28,7 @@ export interface ModelProfileProps {
 }
 
 export type PromptsConfigProps = Record<string, unknown>
+export type PromptLanguage = 'en' | 'zh'
 
 export interface ContentGenerationIntervalConfigProps {
   enabled?: boolean
@@ -108,6 +109,16 @@ export const validateModelSettingsAPI = async (params: ModelConfigProps): Promis
 export const getPromptsAPI = async (): Promise<PromptsConfigProps> => {
   const res = await axiosInstance.get<ApiResponse<{ prompts: PromptsConfigProps }>>('/api/settings/prompts')
   return get(res, 'data.data.prompts') || {}
+}
+
+export const getPromptLanguageAPI = async (): Promise<PromptLanguage> => {
+  const res = await axiosInstance.get<ApiResponse<{ language: PromptLanguage }>>('/api/settings/prompts/language')
+  const language = get(res, 'data.data.language')
+  return language === 'zh' ? 'zh' : 'en'
+}
+
+export const updatePromptLanguageAPI = async (language: PromptLanguage): Promise<void> => {
+  await axiosInstance.post('/api/settings/prompts/language', { language })
 }
 
 export const updatePromptsAPI = async (prompts: PromptsConfigProps): Promise<void> => {

@@ -13,7 +13,7 @@ import { IpcChannel } from '@shared/IpcChannel'
 import { BrowserWindow, dialog, ipcMain, ProxyConfig, session, shell, systemPreferences } from 'electron'
 import { Notification } from 'src/renderer/src/types/notification'
 import type { ThemeMode } from '@shared/theme'
-import type { AppRuntimeSettings } from '@shared/app-runtime-settings'
+import type { AppLanguage, AppRuntimeSettings } from '@shared/app-runtime-settings'
 
 import appService from './services/AppService'
 import { appRuntimeSettingsService } from './services/AppRuntimeSettingsService'
@@ -115,10 +115,16 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   themeService.init()
   ipcMain.handle(IpcChannel.App_GetTheme, () => themeService.getTheme())
   ipcMain.handle(IpcChannel.App_SetTheme, (_, mode: ThemeMode) => themeService.setTheme(mode))
+  ipcMain.handle(IpcChannel.App_SetLanguage, async (_, language: AppLanguage) => {
+    const nextSettings = await appRuntimeSettingsService.setSettings({ language })
+    getTrayService()?.setLanguage(nextSettings.language)
+    return nextSettings.language
+  })
   ipcMain.handle(IpcChannel.App_GetRuntimeSettings, () => appRuntimeSettingsService.getSettings())
   ipcMain.handle(IpcChannel.App_SetRuntimeSettings, async (_, settings: Partial<AppRuntimeSettings>) => {
     const nextSettings = await appRuntimeSettingsService.setSettings(settings)
     await proxyManager.configureProxy(proxyConfigFromRuntimeSettings(nextSettings))
+    getTrayService()?.setLanguage(nextSettings.language)
     return nextSettings
   })
 

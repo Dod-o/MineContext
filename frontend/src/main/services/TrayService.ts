@@ -6,6 +6,7 @@ import path from 'path'
 import { getLogger } from '@shared/logger/main'
 import { IpcServerPushChannel } from '@shared/ipc-server-push-channel'
 import screenshotService from './ScreenshotService'
+import { normalizeAppLanguage, resolveAppLanguage, type AppLanguage } from '@shared/app-runtime-settings'
 
 const logger = getLogger('TrayService')
 const trayLabels = {
@@ -34,15 +35,20 @@ export class TrayService {
   private isRecording: boolean = false
   private trayIcon: NativeImage | null = null
   private trayIconRecording: NativeImage | null = null
+  private language: AppLanguage
 
-  constructor(mainWindow: BrowserWindow) {
+  constructor(mainWindow: BrowserWindow, language: AppLanguage = 'system') {
     this.mainWindow = mainWindow
+    this.language = normalizeAppLanguage(language)
     this.loadIcons()
   }
 
   private get labels() {
-    const locale = app.getLocale().toLowerCase()
-    return locale.startsWith('zh') ? trayLabels.zh : trayLabels.en
+    return resolveAppLanguage(this.language, app.getLocale()) === 'zh' ? trayLabels.zh : trayLabels.en
+  }
+
+  private getTooltip(): string {
+    return this.isRecording ? `MineContext - ${this.t('recording')}` : `MineContext - ${this.t('paused')}`
   }
 
   /**
@@ -146,7 +152,7 @@ export class TrayService {
       this.tray = new Tray(this.trayIcon)
 
       // Set tooltip
-      this.tray.setToolTip('MineContext')
+      this.tray.setToolTip(this.getTooltip())
 
       // Platform-specific behavior
       if (process.platform === 'win32') {
@@ -288,8 +294,7 @@ export class TrayService {
       }
 
       // Update tooltip
-      const tooltip = isRecording ? `MineContext - ${this.t('recording')}` : `MineContext - ${this.t('paused')}`
-      this.tray.setToolTip(tooltip)
+      this.tray.setToolTip(this.getTooltip())
 
       // Update context menu
       this.tray.setContextMenu(this.buildContextMenu())
@@ -314,6 +319,16 @@ export class TrayService {
    */
   exists(): boolean {
     return this.tray !== null
+  }
+
+  setLanguage(language: AppLanguage): void {
+    this.language = normalizeAppLanguage(language)
+
+    if (this.tray) {
+      this.tray.setToolTip(this.getTooltip())
+      this.tray.setContextMenu(this.buildContextMenu())
+      logger.info(`Tray language updated: ${this.language}`)
+    }
   }
 
   private t(key: TrayLabelKey): string {

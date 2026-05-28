@@ -7,11 +7,13 @@ export const MAX_BACKEND_START_PORT = 65535
 export const DEFAULT_PROXY_BYPASS_RULES = 'localhost,127.0.0.1,::1'
 
 export type AppProxyMode = 'system' | 'direct' | 'custom'
+export type AppLanguage = 'system' | 'en' | 'zh'
 
 export interface AppRuntimeSettings {
   screenshotDirectory: string
   backendStartPort: number
   retainScreenshotImages: boolean
+  language: AppLanguage
   proxyMode: AppProxyMode
   proxyUrl: string
   proxyBypassRules: string
@@ -21,6 +23,7 @@ export const defaultAppRuntimeSettings: AppRuntimeSettings = {
   screenshotDirectory: '',
   backendStartPort: DEFAULT_BACKEND_START_PORT,
   retainScreenshotImages: true,
+  language: 'system',
   proxyMode: 'system',
   proxyUrl: '',
   proxyBypassRules: DEFAULT_PROXY_BYPASS_RULES
@@ -69,11 +72,26 @@ export function normalizeProxyUrl(value: unknown): string {
   return ''
 }
 
+export function normalizeAppLanguage(value: unknown): AppLanguage {
+  if (value === 'en' || value === 'zh') {
+    return value
+  }
+  return 'system'
+}
+
+export function resolveAppLanguage(language: AppLanguage, locale?: string): 'en' | 'zh' {
+  if (language === 'en' || language === 'zh') {
+    return language
+  }
+  return (locale || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
 export function normalizeAppRuntimeSettings(settings?: Partial<AppRuntimeSettings> | null): AppRuntimeSettings {
   return {
     screenshotDirectory: typeof settings?.screenshotDirectory === 'string' ? settings.screenshotDirectory.trim() : '',
     backendStartPort: normalizeBackendStartPort(settings?.backendStartPort),
     retainScreenshotImages: settings?.retainScreenshotImages !== false,
+    language: normalizeAppLanguage(settings?.language),
     proxyMode: normalizeProxyMode(settings?.proxyMode),
     proxyUrl: normalizeProxyUrl(settings?.proxyUrl),
     proxyBypassRules:
