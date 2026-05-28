@@ -13,7 +13,7 @@ import {
   refreshCaptureSourcesAtom,
   refreshCaptureSourcesFromSettingsAtom
 } from '@renderer/atom/capture.atom'
-import { get } from 'lodash'
+import { get, uniqBy } from 'lodash'
 import { useAtomValue } from 'jotai'
 import { useObservableTask } from '@renderer/atom/event-loop.atom'
 // Extracted components
@@ -440,21 +440,28 @@ const ScreenMonitor: React.FC = () => {
     () => (settingSources.state === 'hasData' ? get(settingSources, 'data.appSources') : ([] as CaptureSource[])),
     [settingSources]
   )
+  const hasSavedCaptureSettings = settingSources.state === 'hasData' ? get(settingSources, 'data.hasSettings') : false
+  const selectableWindowSources = useMemo(
+    () => uniqBy([...(appAllSources || []), ...(settingWindowSources || [])], 'id'),
+    [appAllSources, settingWindowSources]
+  )
   const [form] = Form.useForm<{ screenSources?: string[]; windowSources?: string[] }>()
   const entry = useMemoizedFn(async () => {
     const screenIds = settingScreenSources?.map((v) => v.id) || []
     const windowIds = settingWindowSources?.map((v) => v.id) || []
     const screenList = screenAllSources?.filter((source) => screenIds?.includes(source.id)) || []
-    const windowList = appAllSources?.filter((source) => windowIds?.includes(source.id)) || []
-    const screenSources = screenList.map((source) => source.id)
+    const windowList = selectableWindowSources?.filter((source) => windowIds?.includes(source.id)) || []
+    const defaultScreenList =
+      !hasSavedCaptureSettings && screenList.length === 0 && windowList.length === 0
+        ? [get(screenAllSources, 0)].filter(Boolean)
+        : []
+    const selectedScreenList = screenList.length > 0 ? screenList : defaultScreenList
+    const screenSources = selectedScreenList.map((source) => source.id)
     form.setFieldsValue({
-      screenSources: screenSources.length > 0 ? screenSources : [get(screenAllSources[0], 'id')].filter(Boolean),
+      screenSources,
       windowSources: windowList.map((source) => source.id)
     })
-    await window.screenMonitorAPI.updateCurrentRecordApp([
-      ...(screenList.length > 0 ? screenList : [get(screenAllSources, 0)].filter(Boolean)),
-      ...windowList
-    ])
+    await window.screenMonitorAPI.updateCurrentRecordApp([...selectedScreenList, ...windowList])
   })
 
   // Tips: The biggest problem with using Form for management is that when the user does not select any screen or window, it will cause the save to fail
@@ -465,7 +472,7 @@ const ScreenMonitor: React.FC = () => {
       return
     }
     const screenList = screenAllSources?.filter((source) => values.screenSources?.includes(source.id)) || []
-    const windowList = appAllSources?.filter((source) => values.windowSources?.includes(source.id)) || []
+    const windowList = selectableWindowSources?.filter((source) => values.windowSources?.includes(source.id)) || []
     await window.screenMonitorAPI.setSettings('settings', {
       screenList,
       windowList
@@ -552,7 +559,7 @@ const ScreenMonitor: React.FC = () => {
           form={form}
           sources={sources}
           screenAllSources={screenAllSources}
-          appAllSources={appAllSources}
+          appAllSources={selectableWindowSources}
           applicationVisible={applicationVisible}
           tempRecordInterval={tempRecordInterval}
           tempEnableRecordingHours={tempEnableRecordingHours}

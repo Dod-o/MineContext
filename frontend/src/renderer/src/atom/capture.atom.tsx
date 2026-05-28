@@ -36,6 +36,7 @@ const fetchCaptureSourcesFromSettings = async () => {
   const screenList = get(settings, 'screenList', [])
   const windowList = get(settings, 'windowList', [])
   return {
+    hasSettings: Boolean(settings),
     screenSources: formatName(screenList),
     appSources: formatName(windowList)
   }
