@@ -187,13 +187,23 @@ class ScreenMonitorTask extends ScheduleNextTask {
   private resolveSourcesForCapture(visibleSources: CaptureSource[]) {
     const visible = visibleSources.filter((source) => source.isVisible)
     const visibleById = new Map(visible.map((source) => [source.id, source]))
+    const visibleScreenByDisplayId = new Map(
+      visible
+        .filter((source) => source.type === 'screen' && source.displayId)
+        .map((source) => [source.displayId, source])
+    )
     const visibleByName = new Map(
       visible.filter((source) => source.name).map((source) => [source.name.toLowerCase(), source])
     )
 
     const resolvedSources = this.appInfo
       .map((source) => {
-        const refreshedSource = visibleById.get(source.id) || visibleByName.get(source.name.toLowerCase())
+        const refreshedSource =
+          visibleById.get(source.id) ||
+          (source.type === 'screen' && source.displayId
+            ? visibleScreenByDisplayId.get(source.displayId)
+            : undefined) ||
+          visibleByName.get(source.name.toLowerCase())
         if (!refreshedSource) {
           return null
         }

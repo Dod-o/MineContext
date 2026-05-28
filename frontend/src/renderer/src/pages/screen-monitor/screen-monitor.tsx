@@ -59,8 +59,28 @@ function sourcesReferToSameWindow(left: CaptureSource, right: CaptureSource) {
   return Boolean(leftName && rightName && leftName === rightName)
 }
 
+function sourcesReferToSameScreen(left: CaptureSource, right: CaptureSource) {
+  if (left.type !== 'screen' || right.type !== 'screen') {
+    return false
+  }
+  if (left.id === right.id) {
+    return true
+  }
+  if (left.displayId && right.displayId && left.displayId === right.displayId) {
+    return true
+  }
+
+  const leftName = normalizeCaptureSourceText(left.name)
+  const rightName = normalizeCaptureSourceText(right.name)
+  return Boolean(leftName && rightName && leftName === rightName)
+}
+
 function findSelectableSourceForSavedWindow(savedSource: CaptureSource, selectableSources: CaptureSource[]) {
   return selectableSources.find((source) => sourcesReferToSameWindow(savedSource, source)) || savedSource
+}
+
+function findSelectableSourceForSavedScreen(savedSource: CaptureSource, selectableSources: CaptureSource[]) {
+  return selectableSources.find((source) => sourcesReferToSameScreen(savedSource, source))
 }
 
 export interface Activity {
@@ -617,8 +637,12 @@ const ScreenMonitor: React.FC = () => {
   }, [appAllSources, settingWindowSources])
   const [form] = Form.useForm<{ screenSources?: string[]; windowSources?: string[] }>()
   const entry = useMemoizedFn(async () => {
-    const screenIds = settingScreenSources?.map((v) => v.id) || []
-    const screenList = screenAllSources?.filter((source) => screenIds?.includes(source.id)) || []
+    const screenList = uniqBy(
+      (settingScreenSources || [])
+        .map((source) => findSelectableSourceForSavedScreen(source, screenAllSources || []))
+        .filter((source): source is CaptureSource => Boolean(source)),
+      'id'
+    )
     const windowList = uniqBy(
       (settingWindowSources || []).map((source) => findSelectableSourceForSavedWindow(source, selectableWindowSources)),
       'id'
@@ -670,9 +694,13 @@ const ScreenMonitor: React.FC = () => {
       return
     }
     const screenList = screenAllSources?.filter((source) => values.screenSources?.includes(source.id)) || []
+    const rememberedOfflineScreens = (settingScreenSources || []).filter(
+      (savedSource) => !screenAllSources.some((source) => sourcesReferToSameScreen(savedSource, source))
+    )
+    const persistedScreenList = uniqBy([...screenList, ...rememberedOfflineScreens], 'id')
     const windowList = selectableWindowSources?.filter((source) => values.windowSources?.includes(source.id)) || []
     await window.screenMonitorAPI.setSettings('settings', {
-      screenList,
+      screenList: persistedScreenList,
       windowList
     })
     await window.screenMonitorAPI.updateCurrentRecordApp([...screenList, ...windowList])
