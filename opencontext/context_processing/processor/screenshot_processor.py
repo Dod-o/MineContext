@@ -370,8 +370,14 @@ class ScreenshotProcessor(BaseContextProcessor):
         new_ctxs = {}
         entity_refresh_items = []
         for result in response_data.get("items", []):
+            if not isinstance(result, dict):
+                logger.warning(f"Skipping invalid merge item from LLM response: {result}")
+                continue
             merge_type = result.get("merge_type")
             data = result.get("data", {})
+            if not isinstance(data, dict):
+                logger.warning(f"Skipping merge item with invalid data payload: {result}")
+                continue
 
             if merge_type == "merged":
                 merged_ids = result.get("merged_ids", [])
