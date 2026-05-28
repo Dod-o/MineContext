@@ -310,13 +310,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="[&_.arco-checkbox]:!flex [&_.arco-checkbox]:!items-center">
               <div className="text-[14px] leading-[20px] text-[#42464e] mb-[4px]">Window</div>
               <div className="text-[10px] leading-[12px] text-[#737a87] mb-[4px]">
-                Only opened applications can be selected
+                Running applications stay selectable
               </div>
               <Form.Item field="windowSources">
                 <Checkbox.Group className="flex flex-col space-y-4">
                   {appAllSources.map((source) => (
                     <Checkbox key={source.id} value={source.id}>
-                      <div className="flex items-center space-x-[4px]">
+                      <div className={clsx('flex items-center space-x-[4px]', !source.isVisible && 'opacity-60')}>
                         <img
                           src={source.appIcon || source.thumbnail || ''}
                           alt=""
@@ -325,6 +325,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="text-[13px] leading-[22px] text-[#0b0b0f] !ml-[4px] line-clamp-1">
                           {source.name}
                         </div>
+                        {!source.isVisible && (
+                          <span className="text-[10px] leading-[14px] text-[#737a87]">Hidden</span>
+                        )}
                       </div>
                     </Checkbox>
                   ))}

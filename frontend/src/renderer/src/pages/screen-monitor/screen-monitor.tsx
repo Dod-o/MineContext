@@ -31,6 +31,37 @@ import { getModelInfo, validateModelSettingsAPI } from '@renderer/services/Setti
 const logger = getLogger('ScreenMonitor')
 type ApiConnectionStatus = 'unknown' | 'checking' | 'connected' | 'error'
 
+function normalizeCaptureSourceText(value?: string | null) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+    .trim()
+}
+
+function sourcesReferToSameWindow(left: CaptureSource, right: CaptureSource) {
+  if (left.id === right.id) {
+    return true
+  }
+
+  const leftTitle = normalizeCaptureSourceText(left.windowTitle || left.name)
+  const rightTitle = normalizeCaptureSourceText(right.windowTitle || right.name)
+  if (
+    leftTitle &&
+    rightTitle &&
+    (leftTitle === rightTitle || leftTitle.includes(rightTitle) || rightTitle.includes(leftTitle))
+  ) {
+    return Math.min(leftTitle.length, rightTitle.length) > 6
+  }
+
+  const leftName = normalizeCaptureSourceText(left.name)
+  const rightName = normalizeCaptureSourceText(right.name)
+  return Boolean(leftName && rightName && leftName === rightName)
+}
+
+function findSelectableSourceForSavedWindow(savedSource: CaptureSource, selectableSources: CaptureSource[]) {
+  return selectableSources.find((source) => sourcesReferToSameWindow(savedSource, source)) || savedSource
+}
+
 export interface Activity {
   id: string
   start_time: string
@@ -88,7 +119,7 @@ const ScreenMonitor: React.FC = () => {
     return (sources.state === 'hasData' ? sources.data.screenSources : []).filter((v) => v.isVisible)
   }, [sources])
   const appAllSources = useMemo(() => {
-    return (sources.state === 'hasData' ? sources.data.appSources : []).filter((v) => v.isVisible)
+    return sources.state === 'hasData' ? sources.data.appSources : []
   }, [sources])
 
   const [currentDate, setCurrentDate] = useState(dayjs().toDate())
@@ -102,6 +133,7 @@ const ScreenMonitor: React.FC = () => {
   const [apiConnectionMessage, setApiConnectionMessage] = useState('')
   const activityPollingRef = useRef<NodeJS.Timeout | null>(null)
   const statsPollingRef = useRef<NodeJS.Timeout | null>(null)
+  const settingsFormInitializedRef = useRef(false)
   const lastCheckedTimeRef = useRef<string>(
     activities.length > 0
       ? activities[activities.length - 1].end_time || activities[activities.length - 1].start_time
@@ -430,6 +462,28 @@ const ScreenMonitor: React.FC = () => {
   })
   const [applicationVisible, setApplicationVisible] = useState(false)
 
+  useEffect(() => {
+    if (settingsVisible) {
+      settingsFormInitializedRef.current = false
+    }
+  }, [settingsVisible])
+
+  useEffect(() => {
+    if (!settingsVisible) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      appStore.set(refreshCaptureSourcesAtom).catch((error) => {
+        logger.error('Failed to refresh application list', { error })
+      })
+    }, 3000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [settingsVisible])
+
   const handleCancelSettings = useMemoizedFn(() => {
     setTempRecordInterval(recordInterval)
     setTempEnableRecordingHours(enableRecordingHours)
@@ -506,16 +560,21 @@ const ScreenMonitor: React.FC = () => {
     [settingSources]
   )
   const hasSavedCaptureSettings = settingSources.state === 'hasData' ? get(settingSources, 'data.hasSettings') : false
-  const selectableWindowSources = useMemo(
-    () => uniqBy([...(appAllSources || []), ...(settingWindowSources || [])], 'id'),
-    [appAllSources, settingWindowSources]
-  )
+  const selectableWindowSources = useMemo(() => {
+    const currentWindowSources = appAllSources || []
+    const savedOnlySources = (settingWindowSources || []).filter(
+      (savedSource) => !currentWindowSources.some((source) => sourcesReferToSameWindow(savedSource, source))
+    )
+    return uniqBy([...currentWindowSources, ...savedOnlySources], 'id')
+  }, [appAllSources, settingWindowSources])
   const [form] = Form.useForm<{ screenSources?: string[]; windowSources?: string[] }>()
   const entry = useMemoizedFn(async () => {
     const screenIds = settingScreenSources?.map((v) => v.id) || []
-    const windowIds = settingWindowSources?.map((v) => v.id) || []
     const screenList = screenAllSources?.filter((source) => screenIds?.includes(source.id)) || []
-    const windowList = selectableWindowSources?.filter((source) => windowIds?.includes(source.id)) || []
+    const windowList = uniqBy(
+      (settingWindowSources || []).map((source) => findSelectableSourceForSavedWindow(source, selectableWindowSources)),
+      'id'
+    )
     const defaultScreenList =
       !hasSavedCaptureSettings && screenList.length === 0 && windowList.length === 0
         ? [get(screenAllSources, 0)].filter(Boolean)
@@ -571,7 +630,8 @@ const ScreenMonitor: React.FC = () => {
   })
 
   useEffect(() => {
-    if (settingSources.state === 'hasData' && sources.state === 'hasData') {
+    const shouldSyncSettings = !settingsVisible || !settingsFormInitializedRef.current
+    if (settingSources.state === 'hasData' && sources.state === 'hasData' && shouldSyncSettings) {
       entry()
       setTempRecordInterval(recordInterval)
       setTempEnableRecordingHours(enableRecordingHours)
@@ -581,8 +641,11 @@ const ScreenMonitor: React.FC = () => {
       setTempManualCaptureShortcut(manualCaptureShortcut)
       setTempExcludedAppPatterns(excludedAppPatterns)
       setTempAdaptiveCapture(adaptiveCapture)
+      if (settingsVisible) {
+        settingsFormInitializedRef.current = true
+      }
     }
-  }, [settingSources, sources])
+  }, [settingSources, sources, settingsVisible])
 
   const handleRequestPermission = useMemoizedFn(async () => {
     await grantPermission()

@@ -212,6 +212,46 @@ class ScreenMonitorTask extends ScheduleNextTask {
 
     return uniqBy(resolvedSources, 'id')
   }
+  private async resolveSelectedSourcesForCapture(visibleSources: CaptureSource[]) {
+    const resolvedSources = this.resolveSourcesForCapture(visibleSources)
+    if (this.appInfo.length === 0) {
+      return resolvedSources
+    }
+
+    const resolvedIds = new Set(resolvedSources.map((source) => source.id))
+    const unresolvedSources = this.appInfo.filter((source) => !resolvedIds.has(source.id))
+    if (unresolvedSources.length === 0) {
+      return resolvedSources
+    }
+
+    try {
+      const result = await screenshotService.getVisibleSources(unresolvedSources.map((source) => source.id))
+      if (!result.success || !result.sources) {
+        return resolvedSources
+      }
+
+      const visibilityById = new Map(result.sources.map((source) => [source.id, source]))
+      const recoveredSources = unresolvedSources
+        .map((source) => {
+          const visibility = visibilityById.get(source.id)
+          if (!visibility?.isVisible) {
+            return null
+          }
+
+          return {
+            ...source,
+            name: visibility.name && visibility.name !== 'Unknown' ? visibility.name : source.name,
+            isVisible: true
+          }
+        })
+        .filter(Boolean) as CaptureSource[]
+
+      return uniqBy([...resolvedSources, ...recoveredSources], 'id')
+    } catch (error) {
+      logger.error('Failed to resolve selected capture sources', error)
+      return resolvedSources
+    }
+  }
   private shouldSkipCaptureForIdleState() {
     const idleState = powerMonitor.getSystemIdleState(IDLE_CAPTURE_SKIP_THRESHOLD_SECONDS)
     if (idleState === 'idle' || idleState === 'locked') {
@@ -460,7 +500,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       )
       const capturableVisibleSources = this.filterExcludedSources(visibleSources || [])
       const ids = capturableVisibleSources?.map((item) => (item.isVisible ? item.id : '')).filter(Boolean) || []
-      if (!visibleSources || ids.length === 0) {
+      if ((!visibleSources || ids.length === 0) && this.appInfo.length === 0) {
         logger.warn('screen monitor visibleSources is empty')
         return
       }
@@ -469,7 +509,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
         return
       }
 
-      const sources = this.resolveSourcesForCapture(capturableVisibleSources)
+      const sources = await this.resolveSelectedSourcesForCapture(capturableVisibleSources)
       if (sources.length === 0) {
         logger.warn('screen monitor selected sources are not currently capturable')
         return
@@ -499,7 +539,7 @@ class ScreenMonitorTask extends ScheduleNextTask {
       }
 
       const capturableVisibleSources = this.filterExcludedSources(visibleSources || [])
-      const configuredSources = this.resolveSourcesForCapture(capturableVisibleSources)
+      const configuredSources = await this.resolveSelectedSourcesForCapture(capturableVisibleSources)
       const fallbackSources =
         this.appInfo.length === 0
           ? capturableVisibleSources.filter((source) => source.isVisible && source.type === 'screen').slice(0, 1)

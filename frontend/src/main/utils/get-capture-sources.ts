@@ -3,13 +3,286 @@
 
 import { app, desktopCapturer, DesktopCapturerSource, systemPreferences } from 'electron'
 import screenshot from 'screenshot-desktop'
-import { exec, spawn } from 'node:child_process'
+import { exec, execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { getLogger } from '@shared/logger/main'
 import { FinalWindowInfo, getAllWindows } from './mac-window-manager'
 import { NativeCaptureHelper } from './native-capture-helper'
 import path from 'node:path'
 const logger = getLogger('ScreenshotService')
+
+interface WindowBounds {
+  X: number
+  Y: number
+  Width: number
+  Height: number
+}
+
+interface NativeWindowInfo extends FinalWindowInfo {
+  processId?: number
+  isMinimized?: boolean
+  area?: number
+}
+
+interface VirtualWindowIdentity {
+  windowId?: number
+  appName: string
+  windowTitle?: string
+}
+
+const WINDOWS_SYSTEM_APPS = new Set([
+  'dwm',
+  'electron',
+  'minecontext',
+  'searchhost',
+  'shellexperiencehost',
+  'startmenuexperiencehost',
+  'tabtip',
+  'textinputhost',
+  'widgets'
+])
+
+const WINDOWS_SYSTEM_WINDOW_TITLES = new Set([
+  'popuphost',
+  'program manager',
+  'shell handwriting canvas',
+  'task switching',
+  'windows input experience'
+])
+
+const WINDOWS_WINDOW_ENUM_SCRIPT = String.raw`
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public static class MineContextWindowLister {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+  [DllImport("user32.dll")]
+  public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+  [DllImport("user32.dll")]
+  public static extern bool IsWindowVisible(IntPtr hWnd);
+
+  [DllImport("user32.dll")]
+  public static extern bool IsIconic(IntPtr hWnd);
+
+  [DllImport("user32.dll")]
+  public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+  [DllImport("user32.dll")]
+  public static extern int GetWindowTextLength(IntPtr hWnd);
+
+  [DllImport("user32.dll")]
+  public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+  [DllImport("user32.dll")]
+  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RECT {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+  }
+}
+"@
+
+$windows = New-Object System.Collections.Generic.List[object]
+$callback = [MineContextWindowLister+EnumWindowsProc] {
+  param([IntPtr]$hwnd, [IntPtr]$lparam)
+
+  $length = [MineContextWindowLister]::GetWindowTextLength($hwnd)
+  if ($length -le 0) { return $true }
+
+  $builder = New-Object System.Text.StringBuilder ($length + 1)
+  [void][MineContextWindowLister]::GetWindowText($hwnd, $builder, $builder.Capacity)
+  $title = $builder.ToString().Trim()
+  if ([string]::IsNullOrWhiteSpace($title)) { return $true }
+
+  $rect = New-Object MineContextWindowLister+RECT
+  [void][MineContextWindowLister]::GetWindowRect($hwnd, [ref]$rect)
+  $width = $rect.Right - $rect.Left
+  $height = $rect.Bottom - $rect.Top
+  if ($width -lt 50 -or $height -lt 50) { return $true }
+
+  $windowProcessId = [UInt32]0
+  [void][MineContextWindowLister]::GetWindowThreadProcessId($hwnd, [ref]$windowProcessId)
+  $processName = ''
+  try {
+    $processName = (Get-Process -Id $windowProcessId -ErrorAction Stop).ProcessName
+  } catch {}
+
+  $windows.Add([pscustomobject]@{
+    windowId = $hwnd.ToInt64()
+    processId = [int64]$windowProcessId
+    appName = $processName
+    windowTitle = $title
+    isOnScreen = ([MineContextWindowLister]::IsWindowVisible($hwnd) -and -not [MineContextWindowLister]::IsIconic($hwnd))
+    isMinimized = [MineContextWindowLister]::IsIconic($hwnd)
+    bounds = @{
+      X = $rect.Left
+      Y = $rect.Top
+      Width = $width
+      Height = $height
+    }
+    area = $width * $height
+  }) | Out-Null
+
+  return $true
+}
+
+[void][MineContextWindowLister]::EnumWindows($callback, [IntPtr]::Zero)
+$windows | ConvertTo-Json -Depth 5 -Compress
+`
+
+const execFileAsync = promisify(execFile)
+
+function createVirtualWindowId(windowId: number | undefined, appName: string, windowTitle?: string) {
+  const stableWindowId = windowId || 0
+  return `virtual-window:${stableWindowId}:${encodeURIComponent(appName)}:${encodeURIComponent(windowTitle || '')}`
+}
+
+function parseVirtualWindowId(sourceId: string): VirtualWindowIdentity | null {
+  const currentMatch = sourceId.match(/^virtual-window:(\d+):([^:]*):?(.*)$/)
+  if (currentMatch) {
+    return {
+      windowId: Number(currentMatch[1]),
+      appName: decodeURIComponent(currentMatch[2] || ''),
+      windowTitle: currentMatch[3] ? decodeURIComponent(currentMatch[3]) : undefined
+    }
+  }
+
+  const legacyMatch = sourceId.match(/^virtual-window:(\d+)-(.+)$/)
+  if (legacyMatch) {
+    return {
+      windowId: Number(legacyMatch[1]),
+      appName: decodeURIComponent(legacyMatch[2] || '')
+    }
+  }
+
+  return null
+}
+
+function normalizeCaptureText(value?: string | null) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+    .trim()
+}
+
+function findMatchingDesktopWindowSource<T extends { name: string }>(
+  sources: T[],
+  appName?: string,
+  windowTitle?: string
+): T | undefined {
+  const app = normalizeCaptureText(appName)
+  const title = normalizeCaptureText(windowTitle)
+
+  if (title) {
+    const byTitle = sources.find((source) => {
+      const sourceName = normalizeCaptureText(source.name)
+      return sourceName === title || sourceName.includes(title) || title.includes(sourceName)
+    })
+    if (byTitle) {
+      return byTitle
+    }
+  }
+
+  if (!app) {
+    return undefined
+  }
+
+  return sources.find((source) => normalizeCaptureText(source.name).includes(app))
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function createWindowPlaceholder(appName: string, detail: string, stateLabel: string) {
+  const svg = `
+    <svg width="256" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="256" height="144" fill="#3f4652"/>
+      <text x="128" y="62" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="white">${escapeSvgText(appName)}</text>
+      <text x="128" y="86" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#d9dde5">${escapeSvgText(detail)}</text>
+      <text x="128" y="108" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#aeb6c4">${escapeSvgText(stateLabel)}</text>
+    </svg>
+  `
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+}
+
+async function getWindowsWithRealIds(): Promise<NativeWindowInfo[]> {
+  if (process.platform !== 'win32') {
+    return []
+  }
+
+  try {
+    const powershellPath = process.env.SystemRoot
+      ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+      : 'powershell.exe'
+    const { stdout } = await execFileAsync(
+      powershellPath,
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', WINDOWS_WINDOW_ENUM_SCRIPT],
+      {
+        timeout: 5000,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024
+      }
+    )
+    const output = String(stdout || '').trim()
+    if (!output) {
+      return []
+    }
+
+    const parsed = JSON.parse(output)
+    const windows = Array.isArray(parsed) ? parsed : [parsed]
+
+    return windows
+      .map((window: any): NativeWindowInfo => {
+        const appName = String(window.appName || '').trim()
+        const windowTitle = String(window.windowTitle || '').trim()
+        const bounds = window.bounds as WindowBounds | undefined
+        return {
+          windowId: Number(window.windowId),
+          appName,
+          windowTitle,
+          isOnScreen: Boolean(window.isOnScreen),
+          isImportantApp: false,
+          processId: Number(window.processId) || undefined,
+          isMinimized: Boolean(window.isMinimized),
+          bounds,
+          area: Number(window.area) || (bounds ? bounds.Width * bounds.Height : 0)
+        }
+      })
+      .filter((window) => {
+        if (!window.windowId || !window.windowTitle) {
+          return false
+        }
+
+        const appName = normalizeCaptureText(window.appName)
+        if (WINDOWS_SYSTEM_APPS.has(appName)) {
+          return false
+        }
+
+        const windowTitle = normalizeCaptureText(window.windowTitle)
+        return !WINDOWS_SYSTEM_WINDOW_TITLES.has(windowTitle)
+      })
+      .sort((a, b) => a.appName.localeCompare(b.appName) || a.windowTitle.localeCompare(b.windowTitle))
+  } catch (error: any) {
+    logger.warn(`Windows window enumeration failed: ${error.message}`)
+    return []
+  }
+}
 
 /**
  * @interface CaptureSource
@@ -64,6 +337,53 @@ class CaptureSourcesTools {
           isVisible: true // desktopCapturer only returns visible windows
         }
       })
+
+      if (process.platform === 'win32') {
+        const windows = await getWindowsWithRealIds()
+
+        if (windows.length > 0) {
+          const screenSources = formattedSources.filter((source) => source.type === 'screen')
+          const desktopWindowSources = formattedSources.filter((source) => source.type === 'window')
+          const matchedDesktopSourceIds = new Set<string>()
+
+          const virtualWindowSources = windows.map((window) => {
+            const matchingDesktopSource = findMatchingDesktopWindowSource(
+              desktopWindowSources.filter((source) => !matchedDesktopSourceIds.has(source.id)),
+              window.appName,
+              window.windowTitle
+            )
+
+            if (matchingDesktopSource) {
+              matchedDesktopSourceIds.add(matchingDesktopSource.id)
+            }
+
+            const isVisible = Boolean(matchingDesktopSource) && window.isOnScreen
+            return {
+              id: createVirtualWindowId(window.windowId, window.appName || 'Window', window.windowTitle),
+              name: window.appName ? `${window.appName} - ${window.windowTitle}` : window.windowTitle,
+              type: 'window',
+              thumbnail:
+                matchingDesktopSource?.thumbnail ||
+                createWindowPlaceholder(window.appName || 'Window', window.windowTitle, isVisible ? 'Visible' : 'Hidden'),
+              appIcon: matchingDesktopSource?.appIcon || null,
+              isVisible,
+              isVirtual: true,
+              appName: window.appName,
+              windowTitle: window.windowTitle,
+              windowId: window.windowId
+            } as CaptureSource
+          })
+
+          const unmatchedDesktopWindowSources = desktopWindowSources.filter(
+            (source) => !matchedDesktopSourceIds.has(source.id)
+          )
+
+          return {
+            success: true,
+            sources: [...screenSources, ...virtualWindowSources, ...unmatchedDesktopWindowSources]
+          }
+        }
+      }
 
       if (process.platform === 'darwin') {
         try {
@@ -347,9 +667,9 @@ class CaptureSourcesTools {
 
       // Handle virtual windows (minimized or on other spaces)
       if (sourceId.startsWith('virtual-window:')) {
-        // Extract app name from the source ID
-        const appNameMatch = sourceId.match(/virtual-window:\d+-(.+)$/)
-        const appName = appNameMatch ? decodeURIComponent(appNameMatch[1]) : null
+        const virtualWindow = parseVirtualWindowId(sourceId)
+        const appName = virtualWindow?.appName || null
+        const windowTitle = virtualWindow?.windowTitle
 
         // Declare matchingSource in the correct scope
         let matchingSource: DesktopCapturerSource | undefined = undefined
@@ -362,16 +682,7 @@ class CaptureSourcesTools {
         })
 
         // Quick check if app is likely on current desktop
-        const quickMatch = quickSources.find((source) => {
-          const name = source.name.toLowerCase()
-          const appLower = appName?.toLowerCase() || ''
-          return (
-            name.includes(appLower) ||
-            (appLower.includes('powerpoint') && (name.includes('powerpoint') || name.includes('ppt'))) ||
-            (appLower.includes('wechat') && name.includes('weixin')) ||
-            (appLower.includes('chrome') && name.includes('chrome'))
-          )
-        })
+        const quickMatch = findMatchingDesktopWindowSource(quickSources, appName || undefined, windowTitle)
 
         if (quickMatch) {
           // Disabled to reduce log spam during frequent captures
@@ -399,6 +710,13 @@ class CaptureSourcesTools {
           }
         } else {
           // App not on current desktop
+        }
+
+        if (process.platform !== 'darwin') {
+          return {
+            success: false,
+            error: `Window is not currently capturable: ${[appName, windowTitle].filter(Boolean).join(' - ') || sourceId}`
+          }
         }
 
         // Check variable state
@@ -695,13 +1013,28 @@ class CaptureSourcesTools {
           let name = 'Unknown'
 
           if (id.startsWith('virtual-window:')) {
-            const appNameMatch = id.match(/virtual-window:\d+-(.+)$/)
-            if (appNameMatch) {
-              name = decodeURIComponent(appNameMatch[1])
+            const virtualWindow = parseVirtualWindowId(id)
+            if (virtualWindow) {
+              name = [virtualWindow.appName, virtualWindow.windowTitle].filter(Boolean).join(' - ')
+              const visibleDesktopSource = findMatchingDesktopWindowSource(
+                visibleSources,
+                virtualWindow.appName,
+                virtualWindow.windowTitle
+              )
+
+              if (visibleDesktopSource) {
+                isVisible = true
+                name = visibleDesktopSource.name
+                logger.info(`Virtual window found capturable: ${id} -> ${name}`)
+              } else if (process.platform !== 'darwin') {
+                logger.info(`Virtual window NOT capturable: ${id} -> ${name}`)
+
+                return { id, isVisible, name }
+              }
 
               // Enhanced visibility check: app is visible if it has windows on ANY space
               if (activeAppsOnAllSpaces.length > 0) {
-                const appNameLower = name.toLowerCase()
+                const appNameLower = virtualWindow.appName.toLowerCase()
                 const hasWindowsOnAnySpace = activeAppsOnAllSpaces.some((activeApp) => {
                   return (
                     activeApp.includes(appNameLower) ||
