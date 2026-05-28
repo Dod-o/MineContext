@@ -6,6 +6,11 @@ exports.default = async function notarizing(context) {
   }
 
   if (!process.env.APPLE_ID || !process.env.APPLE_APP_SPECIFIC_PASSWORD || !process.env.APPLE_TEAM_ID) {
+    const message = 'Apple notarization credentials are missing; macOS release artifacts would fail Gatekeeper.'
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      throw new Error(message)
+    }
+    console.warn(message)
     return
   }
 

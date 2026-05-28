@@ -40,6 +40,7 @@ mac:
     - from: externals/python/window_capture/dist/window_capture/window_capture
       to: bin/window_capture
   entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
   icon: build/icon.icns
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
