@@ -58,6 +58,16 @@ class ApiFeedbackStaticTest(unittest.TestCase):
         self.assertIn("timeout=15", settings_route)
         self.assertIn("Failed to save settings", settings_route)
 
+    def test_model_validation_endpoint_surfaces_provider_connection_failures(self):
+        settings_route = SETTINGS_ROUTE.read_text(encoding="utf-8")
+        settings_service = SETTINGS_SERVICE.read_text(encoding="utf-8")
+
+        self.assertIn('@router.post("/api/model_settings/validate")', settings_route)
+        self.assertIn('errors.append(f"VLM: {vlm_msg}")', settings_route)
+        self.assertIn('errors.append(f"Embedding: {emb_msg}")', settings_route)
+        self.assertIn("validateModelSettingsAPI", settings_service)
+        self.assertIn("return get(res, 'data.message')", settings_service)
+
 
 if __name__ == "__main__":
     unittest.main()
