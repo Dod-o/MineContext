@@ -40,6 +40,14 @@ class StorageSettingsStaticTest(unittest.TestCase):
         self.assertIn("retention_days", settings_route)
         self.assertIn("cleanup_image_storage", settings_route)
 
+    def test_manual_image_storage_status_and_cleanup_endpoints_exist(self):
+        settings_route = SETTINGS_ROUTE.read_text(encoding="utf-8")
+
+        self.assertIn('@router.get("/api/settings/image_storage")', settings_route)
+        self.assertIn('@router.post("/api/settings/image_storage/cleanup")', settings_route)
+        self.assertIn("dry_run", settings_route)
+        self.assertIn('result["status"] = get_image_storage_status(roots)', settings_route)
+
 
 if __name__ == "__main__":
     unittest.main()
