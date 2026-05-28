@@ -51,9 +51,9 @@ class ReportGenerator:
             from opencontext.models.enums import VaultType
             from opencontext.storage.global_storage import get_storage
 
-            now = datetime.datetime.now()
+            report_title = self._build_daily_report_title(start_time)
             report_id = get_storage().insert_vaults(
-                title=f"Daily Report - {now.strftime('%Y-%m-%d')}",
+                title=report_title,
                 summary="",
                 content=result,
                 document_type=VaultType.DAILY_REPORT.value,
@@ -63,7 +63,7 @@ class ReportGenerator:
                 data={
                     "doc_id": str(report_id),
                     "doc_type": "vaults",
-                    "title": f"Daily Report - {now.strftime('%Y-%m-%d')}",
+                    "title": report_title,
                     "content": result,
                 },
             )
@@ -72,6 +72,9 @@ class ReportGenerator:
             logger.exception(f"Error generating activity report: {e}")
             return f"Error generating activity report: {str(e)}"
 
+    def _build_daily_report_title(self, start_time: int) -> str:
+        report_date = datetime.datetime.fromtimestamp(start_time).date()
+        return f"Daily Report - {report_date.strftime('%Y-%m-%d')}"
 
     async def _process_chunks_concurrently(self, start_time: int, end_time: int) -> list:
         """Process all time chunks concurrently."""
