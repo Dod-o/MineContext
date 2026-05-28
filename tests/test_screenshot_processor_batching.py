@@ -1,5 +1,8 @@
 import importlib.util
+import asyncio
+import os
 import sys
+import tempfile
 import types
 import unittest
 from datetime import datetime, timedelta
@@ -146,6 +149,103 @@ class ScreenshotProcessorBatchingTest(unittest.TestCase):
             [context.extracted_data.title for context in trimmed.values()],
             ["context 2", "context 3"],
         )
+
+    def test_vlm_response_accepts_root_list_and_skips_invalid_items(self):
+        processor = self._build_processor()
+
+        original_generate = screenshot_processor_module.generate_with_messages_async
+        original_parser = screenshot_processor_module.parse_json_from_response
+        original_prompt_group = screenshot_processor_module.get_prompt_group
+        original_descriptions = screenshot_processor_module.get_context_type_descriptions_for_extraction
+
+        async def fake_generate(_messages):
+            return "ignored"
+
+        screenshot_processor_module.generate_with_messages_async = fake_generate
+        screenshot_processor_module.parse_json_from_response = lambda _response: [
+            ["unexpected-list"],
+            {
+                "context_type": "activity_context",
+                "title": "usable item",
+                "summary": "created from a root-list response",
+            },
+        ]
+        screenshot_processor_module.get_prompt_group = lambda _name: {
+            "system": "{context_type_descriptions}",
+            "user": "{current_date} {current_timestamp} {current_timezone}",
+        }
+        screenshot_processor_module.get_context_type_descriptions_for_extraction = lambda: ""
+
+        tmp_file = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            tmp_file.write(b"not-a-real-image-but-readable")
+            tmp_file.close()
+            raw_context = self._raw_context(1)
+            raw_context.content_path = tmp_file.name
+
+            result = asyncio.run(processor._process_vlm_single(raw_context))
+
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0].extracted_data.title, "usable item")
+        finally:
+            screenshot_processor_module.generate_with_messages_async = original_generate
+            screenshot_processor_module.parse_json_from_response = original_parser
+            screenshot_processor_module.get_prompt_group = original_prompt_group
+            screenshot_processor_module.get_context_type_descriptions_for_extraction = original_descriptions
+            os.unlink(tmp_file.name)
+
+    def test_merge_response_preserves_unhandled_new_items(self):
+        processor = self._build_processor()
+        processor._processed_cache = {}
+        context = self._processed_context(1)
+
+        original_generate = screenshot_processor_module.generate_with_messages_async
+        original_parser = screenshot_processor_module.parse_json_from_response
+        original_prompt_group = screenshot_processor_module.get_prompt_group
+        original_vectorize = screenshot_processor_module.do_vectorize_async
+        original_refresh = screenshot_processor_module.refresh_entities
+
+        async def fake_generate(_messages):
+            return "ignored"
+
+        async def fake_vectorize(vectorize):
+            vectorize.vector = [0.1, 0.2]
+            return vectorize
+
+        async def fake_refresh(_entities, _text):
+            return []
+
+        screenshot_processor_module.generate_with_messages_async = fake_generate
+        screenshot_processor_module.parse_json_from_response = lambda _response: {
+            "items": [
+                ["unexpected-list"],
+                {"merge_type": "merged", "merged_ids": "not-a-list", "data": []},
+            ]
+        }
+        screenshot_processor_module.get_prompt_group = lambda _name: {
+            "system": "system",
+            "user": "{context_type} {items_json}",
+        }
+        screenshot_processor_module.do_vectorize_async = fake_vectorize
+        screenshot_processor_module.refresh_entities = fake_refresh
+
+        try:
+            result = asyncio.run(
+                processor._merge_items_with_llm(
+                    ContextType.ACTIVITY_CONTEXT,
+                    [context],
+                    [],
+                )
+            )
+
+            self.assertEqual([item.id for item in result["processed_contexts"]], [context.id])
+            self.assertEqual(list(result["new_ctxs"].keys()), [context.id])
+        finally:
+            screenshot_processor_module.generate_with_messages_async = original_generate
+            screenshot_processor_module.parse_json_from_response = original_parser
+            screenshot_processor_module.get_prompt_group = original_prompt_group
+            screenshot_processor_module.do_vectorize_async = original_vectorize
+            screenshot_processor_module.refresh_entities = original_refresh
 
 
 if __name__ == "__main__":

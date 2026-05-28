@@ -114,6 +114,39 @@ class ScreenshotProcessor(BaseContextProcessor):
         kept_items = sorted(context_cache.items(), key=sort_key)[-max_cached_contexts:]
         return dict(kept_items)
 
+    def _extract_llm_items(
+        self,
+        response_data: Any,
+        source: str,
+        allow_root_list: bool = False,
+    ) -> List[Dict[str, Any]]:
+        if allow_root_list and isinstance(response_data, list):
+            raw_items = response_data
+        elif isinstance(response_data, dict):
+            raw_items = response_data.get("items", [])
+        else:
+            logger.warning(
+                f"{source} response root must be an object"
+                f"{' or list' if allow_root_list else ''}, got {type(response_data).__name__}"
+            )
+            return []
+
+        if raw_items is None:
+            return []
+        if not isinstance(raw_items, list):
+            logger.warning(f"{source} response items must be a list, got {type(raw_items).__name__}")
+            return []
+
+        items = []
+        for item in raw_items:
+            if isinstance(item, dict):
+                items.append(item)
+            else:
+                logger.warning(
+                    f"Skipping invalid {source} response item of type {type(item).__name__}"
+                )
+        return items
+
     def shutdown(self, graceful: bool = False):
         """Gracefully shut down background processing tasks."""
         logger.info("Shutting down ScreenshotProcessor...")
@@ -386,10 +419,12 @@ class ScreenshotProcessor(BaseContextProcessor):
             logger.error(f"Empty VLM response.")
             raise ValueError(f"Empty VLM response.")
         
-        items = raw_resp.get("items", [])
+        items = self._extract_llm_items(raw_resp, "VLM", allow_root_list=True)
         processed_items = []
         for item in items:
-            processed_items.append(self._create_processed_context(item, raw_context))
+            processed_context = self._create_processed_context(item, raw_context)
+            if processed_context is not None:
+                processed_items.append(processed_context)
         return processed_items
 
     async def _merge_contexts(self, processed_items: List[ProcessedContext]) -> List[ProcessedContext]:
@@ -406,16 +441,21 @@ class ScreenshotProcessor(BaseContextProcessor):
             items_by_type.setdefault(context_type, []).append(item)
 
         tasks = []
+        task_context_types = []
         for context_type, new_items in items_by_type.items():
             cached_items = list(self._processed_cache.get(context_type.value, {}).values())
             tasks.append(self._merge_items_with_llm(context_type, new_items, cached_items))
+            task_context_types.append(context_type)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_newly_created = []
         for idx, result in enumerate(results):
+            result_context_type = task_context_types[idx]
             if isinstance(result, Exception):
-                logger.error(f"Merge task {idx} failed with error: {result} for context type: {context_type.value}")
+                logger.error(
+                    f"Merge task {idx} failed with error: {result} for context type: {result_context_type.value}"
+                )
                 continue
             if result:
                 context_type = result.get("context_type")
@@ -450,9 +490,11 @@ class ScreenshotProcessor(BaseContextProcessor):
             raise ValueError(f"Empty LLM response when merge items for context type: {context_type.value}")
 
         response_data = parse_json_from_response(response)
-        if not isinstance(response_data, dict) or "items" not in response_data:
+        if not isinstance(response_data, dict):
             logger.error(f"merge_items_with_llm, Invalid response format: {response_data}")
-            raise ValueError(f"Invalid response format when merge items for context type: {context_type.value}")
+            response_items = []
+        else:
+            response_items = self._extract_llm_items(response_data, f"merge {context_type.value}")
 
         # Process results and build ProcessedContext objects
         result_contexts = []
@@ -463,11 +505,19 @@ class ScreenshotProcessor(BaseContextProcessor):
         final_context = None
         new_ctxs = {}
         entity_refresh_items = []
-        for result in response_data.get("items", []):
+        handled_new_ids = set()
+        new_item_ids = {item.id for item in new_items}
+
+        def add_context_for_entity_refresh(
+            context: ProcessedContext,
+            entities: Optional[List[Dict[str, Any]]] = None,
+        ) -> None:
+            final_context = self._trim_context_memory(context)
+            new_ctxs[final_context.id] = final_context
+            entity_refresh_items.append((final_context, entities or []))
+
+        for result in response_items:
             final_context = None
-            if not isinstance(result, dict):
-                logger.warning(f"Skipping invalid merge item from LLM response: {result}")
-                continue
             merge_type = result.get("merge_type")
             data = result.get("data", {})
             if not isinstance(data, dict):
@@ -476,13 +526,14 @@ class ScreenshotProcessor(BaseContextProcessor):
 
             if merge_type == "merged":
                 merged_ids = result.get("merged_ids", [])
-                if not merged_ids:
+                if not isinstance(merged_ids, list) or not merged_ids:
                     logger.error(f"merged type but no merged_ids, skipping")
                     continue
                 items_to_merge = [all_items_map[id] for id in merged_ids if id in all_items_map]
                 if not items_to_merge:
                     logger.error(f"No valid items for merged_ids: {merged_ids}")
                     continue
+                handled_new_ids.update(item.id for item in items_to_merge if item.id in new_item_ids)
 
                 min_create_time = min((i.properties.create_time for i in items_to_merge if i.properties.create_time), default=now)
                 event_time = self._parse_event_time_str(
@@ -526,26 +577,37 @@ class ScreenshotProcessor(BaseContextProcessor):
             elif merge_type == "new":
                 # Independent new item
                 merged_ids = result.get("merged_ids", [])
-                if not merged_ids or merged_ids[0] not in all_items_map:
+                if not isinstance(merged_ids, list) or not merged_ids or merged_ids[0] not in all_items_map:
                     logger.error(f"new type but no merged_ids or merged_ids[0] not in all_items_map, skipping")
                     continue
                 if merged_ids[0] in self._processed_cache.get(context_type.value, {}):
+                    handled_new_ids.add(merged_ids[0])
                     continue
                 final_context = all_items_map[merged_ids[0]]
+                if final_context.id in new_item_ids:
+                    handled_new_ids.add(final_context.id)
+            else:
+                logger.warning(f"Skipping merge item with unsupported merge_type: {merge_type}")
+                continue
             if final_context is None:
                 continue
-            final_context = self._trim_context_memory(final_context)
-            new_ctxs[final_context.id] = final_context
-            entity_refresh_items.append(final_context)
+            add_context_for_entity_refresh(final_context, data.get("entities", []))
+
+        for item in new_items:
+            if item.id in handled_new_ids:
+                continue
+            if item.id in self._processed_cache.get(context_type.value, {}):
+                continue
+            add_context_for_entity_refresh(item)
 
         # Second pass: parallel refresh entities
         entity_tasks = [
-            self._parse_single_context(item, data.get("entities", []))
-            for item in entity_refresh_items
+            self._parse_single_context(item, entities)
+            for item, entities in entity_refresh_items
         ]
         # Execute all entity refresh tasks in parallel
         entities_results = await asyncio.gather(*entity_tasks, return_exceptions=True)
-        for entities_result in entities_results:
+        for (item, _), entities_result in zip(entity_refresh_items, entities_results):
             if isinstance(entities_result, Exception):
                 logger.error(f"Entity refresh failed for context {item.id}: {entities_result}")
             else:
@@ -634,9 +696,9 @@ class ScreenshotProcessor(BaseContextProcessor):
         newly_processed_contexts = await self._merge_contexts(all_vlm_items)
         return newly_processed_contexts
 
-    def _create_processed_context(self, analysis: Dict[str, Any], raw_context: RawContextProperties = None) -> ProcessedContext:
+    def _create_processed_context(self, analysis: Dict[str, Any], raw_context: RawContextProperties = None) -> Optional[ProcessedContext]:
         now = datetime.datetime.now()
-        if not analysis:
+        if not isinstance(analysis, dict) or not analysis:
             logger.warning(f"Skipping incomplete item: {analysis}")
             return None
         context_type = None
