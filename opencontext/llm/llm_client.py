@@ -50,6 +50,7 @@ def _normalize_base_url(base_url: str, llm_type: "LLMType") -> str:
 class LLMProvider(Enum):
     OPENAI = "openai"
     DOUBAO = "doubao"
+    ZHIPU = "zhipu"
     ALIYUN = "aliyun"
     CUSTOM = "custom"
 

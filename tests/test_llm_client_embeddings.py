@@ -166,6 +166,20 @@ class LLMClientEmbeddingTest(unittest.TestCase):
 
         self.assertEqual(FakeOpenAI.last_base_url, "https://open.bigmodel.cn/api/paas/v4")
 
+    def test_zhipu_provider_uses_openai_compatible_client(self):
+        self.llm_client.LLMClient(
+            llm_type=self.llm_client.LLMType.CHAT,
+            config={
+                "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                "api_key": "zhipu-key",
+                "model": "glm-4.1v-thinking-flash",
+                "provider": "zhipu",
+            },
+        )
+
+        self.assertEqual(FakeOpenAI.last_base_url, "https://open.bigmodel.cn/api/paas/v4")
+        self.assertEqual(FakeOpenAI.last_api_key, "zhipu-key")
+
     def test_chat_validation_uses_text_and_image_input(self):
         client = self.llm_client.LLMClient(
             llm_type=self.llm_client.LLMType.CHAT,

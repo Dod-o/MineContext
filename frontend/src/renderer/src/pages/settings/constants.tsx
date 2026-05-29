@@ -9,6 +9,7 @@ import custom from '../../assets/images/settings/custom.svg'
 export enum ModelTypeList {
   Doubao = 'doubao',
   OpenAI = 'openai',
+  Zhipu = 'zhipu',
   Custom = 'custom'
 }
 
@@ -18,7 +19,8 @@ export enum embeddingModels {
 }
 export enum BaseUrl {
   DoubaoUrl = 'https://ark.cn-beijing.volces.com/api/v3',
-  OpenAIUrl = 'https://api.openai.com/v1'
+  OpenAIUrl = 'https://api.openai.com/v1',
+  ZhipuUrl = 'https://open.bigmodel.cn/api/paas/v4'
 }
 export interface OptionInfo {
   value: string
@@ -67,6 +69,17 @@ export const ModelInfoList = [
       {
         value: 'gpt-5-nano',
         label: 'GPT-5 Nano'
+      }
+    ]
+  },
+  {
+    icon: <span className="text-[14px] font-semibold leading-none text-[#2b5cff]">智</span>,
+    key: 'Zhipu',
+    value: 'zhipu',
+    option: [
+      {
+        value: 'glm-4.1v-thinking-flash',
+        label: 'GLM-4.1V Thinking Flash'
       }
     ]
   },

@@ -41,6 +41,7 @@ import {
   updateModelSettingsAPI
 } from '../../services/Settings'
 import { useMemoizedFn, useMount, useRequest } from 'ahooks'
+import { useLocalizedText } from '@renderer/hooks/use-app-language'
 
 const FormItem = Form.Item
 const { Text } = Typography
@@ -61,21 +62,25 @@ export interface CustomFormItemsProps {
 }
 const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
   const { prefix } = props
+  const t = useLocalizedText()
   return (
     <>
       <div className="flex flex-col gap-6 mb-6">
         <div className="flex flex-col gap-[8px]">
           <span className="text-[var(--mc-text-primary)] font-roboto text-base font-normal leading-[22px] ">
-            Vision language model
+            {t('Vision language model', '视觉语言模型')}
           </span>
           <FormItem
             field={`${prefix}-modelId`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
+            rules={[{ required: true, message: t('Cannot be empty', '不能为空') }]}
             requiredSymbol={false}>
             <Input
-              addBefore={<InputPrefix label="Model name" />}
-              placeholder="A VLM model with visual understanding capabilities is required."
+              addBefore={<InputPrefix label={t('Model name', '模型名称')} />}
+              placeholder={t(
+                'A VLM model with visual understanding capabilities is required.',
+                '需要一个具备视觉理解能力的 VLM 模型。'
+              )}
               allowClear
               className="[&_.arco-input-inner-wrapper]: !w-[574px]"
             />
@@ -83,11 +88,11 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
           <FormItem
             field={`${prefix}-baseUrl`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
+            rules={[{ required: true, message: t('Cannot be empty', '不能为空') }]}
             requiredSymbol={false}>
             <Input
-              addBefore={<InputPrefix label="Base URL" />}
-              placeholder="Enter your base URL"
+              addBefore={<InputPrefix label={t('Base URL', '接口地址')} />}
+              placeholder={t('Enter your base URL', '请输入接口地址')}
               allowClear
               className="[&_.arco-input-inner-wrapper]: !w-[574px]"
             />
@@ -98,7 +103,7 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
             requiredSymbol={false}>
             <Input.Password
               addBefore={<InputPrefix label="API Key" />}
-              placeholder="Enter your API Key"
+              placeholder={t('Enter your API Key', '请输入 API Key')}
               allowClear
               className="!w-[574px]"
               defaultVisibility={false}
@@ -107,28 +112,28 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
         </div>
         <div className="flex flex-col gap-[8px]">
           <span className="text-[var(--mc-text-primary)] font-roboto text-base font-normal leading-[22px]">
-            Embedding model
+            {t('Embedding model', 'Embedding 模型')}
           </span>
           <FormItem field={`${prefix}-embeddingModelPlatform`} className="!mb-0" requiredSymbol={false}>
             <Select
-              placeholder="Select embedding provider"
+              placeholder={t('Select embedding provider', '选择 Embedding 服务商')}
               className="!w-[574px]"
               options={[
-                { label: 'OpenAI compatible', value: 'custom' },
+                { label: t('OpenAI compatible', 'OpenAI 兼容'), value: 'custom' },
                 { label: 'OpenAI', value: 'openai' },
-                { label: 'Doubao', value: 'doubao' },
-                { label: 'Aliyun DashScope', value: 'aliyun' }
+                { label: t('Doubao', '豆包'), value: 'doubao' },
+                { label: t('Aliyun DashScope', '阿里云 DashScope'), value: 'aliyun' }
               ]}
             />
           </FormItem>
           <FormItem
             field={`${prefix}-embeddingModelId`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
+            rules={[{ required: true, message: t('Cannot be empty', '不能为空') }]}
             requiredSymbol={false}>
             <Input
-              addBefore={<InputPrefix label="Model name" />}
-              placeholder="Enter your embedding model name"
+              addBefore={<InputPrefix label={t('Model name', '模型名称')} />}
+              placeholder={t('Enter your embedding model name', '请输入 Embedding 模型名称')}
               allowClear
               className="!w-[574px]"
             />
@@ -136,11 +141,11 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
           <FormItem
             field={`${prefix}-embeddingBaseUrl`}
             className="!mb-0"
-            rules={[{ required: true, message: 'Cannot be empty' }]}
+            rules={[{ required: true, message: t('Cannot be empty', '不能为空') }]}
             requiredSymbol={false}>
             <Input
-              addBefore={<InputPrefix label="Base URL" />}
-              placeholder="Enter your base URL"
+              addBefore={<InputPrefix label={t('Base URL', '接口地址')} />}
+              placeholder={t('Enter your base URL', '请输入接口地址')}
               allowClear
               className="!w-[574px]"
             />
@@ -151,7 +156,7 @@ const CustomFormItems: FC<CustomFormItemsProps> = (props) => {
             requiredSymbol={false}>
             <Input.Password
               addBefore={<InputPrefix label="API Key" />}
-              placeholder="Enter your API Key"
+              placeholder={t('Enter your API Key', '请输入 API Key')}
               allowClear
               className="!w-[574px]"
               defaultVisibility={false}
@@ -168,6 +173,7 @@ export interface StandardFormItemsProps {
 }
 const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
   const { modelPlatform, prefix } = props
+  const t = useLocalizedText()
   const option = useMemo(() => {
     const foundItem = find(ModelInfoList, (item) => item.value === modelPlatform)
     return foundItem ? foundItem.option : []
@@ -176,21 +182,21 @@ const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
   return (
     <>
       <FormItem
-        label="Select AI model"
+        label={t('Select AI model', '选择 AI 模型')}
         field={`${prefix}-modelId`}
         requiredSymbol={false}
         rules={[
           {
             validator(value, callback) {
               if (!value) {
-                callback('Please select AI model')
+                callback(t('Please select AI model', '请选择 AI 模型'))
               } else {
                 callback()
               }
             }
           }
         ]}>
-        <Select allowCreate placeholder="please select" options={option} className="!w-[574px]" />
+        <Select allowCreate placeholder={t('please select', '请选择')} options={option} className="!w-[574px]" />
       </FormItem>
       <FormItem
         requiredSymbol={false}
@@ -198,17 +204,23 @@ const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
         field={`${prefix}-apiKey`}
         extra={
           <div className="flex items-center text-[var(--mc-text-secondary)] text-[14px] ">
-            You can get the API Key Here:
+            {t('You can get the API Key Here:', '你可以在这里获取 API Key：')}
             <Button
               onClick={() => {
                 const url =
                   modelPlatform === ModelTypeList.Doubao
                     ? 'https://www.volcengine.com/docs/82379/1541594'
-                    : 'https://platform.openai.com/settings/organization/api-keys'
+                    : modelPlatform === ModelTypeList.Zhipu
+                      ? 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
+                      : 'https://platform.openai.com/settings/organization/api-keys'
                 window.open(`${url}`)
               }}
               type="text">
-              {modelPlatform === ModelTypeList.Doubao ? 'Get Doubao API Key' : 'Get OpenAI API Key'}
+              {modelPlatform === ModelTypeList.Doubao
+                ? t('Get Doubao API Key', '获取豆包 API Key')
+                : modelPlatform === ModelTypeList.Zhipu
+                  ? t('Get Zhipu API Key', '获取智谱 API Key')
+                  : t('Get OpenAI API Key', '获取 OpenAI API Key')}
             </Button>
           </div>
         }
@@ -216,7 +228,7 @@ const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
           {
             validator(value, callback) {
               if (!value) {
-                callback('Please enter your API key')
+                callback(t('Please enter your API key', '请输入 API Key'))
               } else {
                 callback()
               }
@@ -225,7 +237,7 @@ const StandardFormItems: FC<StandardFormItemsProps> = (props) => {
         ]}>
         <Input.Password
           autoFocus
-          placeholder="Enter your API key"
+          placeholder={t('Enter your API key', '请输入 API Key')}
           allowClear
           className="!w-[574px]"
           defaultVisibility={false}
@@ -259,35 +271,47 @@ interface PromptPair {
 
 interface PromptCategoryOption {
   label: string
+  zhLabel: string
   value: string
   description: string
+  zhDescription: string
 }
 
 const PROMPT_CATEGORY_OPTIONS: PromptCategoryOption[] = [
   {
     label: 'Todo extraction',
+    zhLabel: '待办提取',
     value: 'generation.todo_extraction',
-    description: 'Control task scope, language, detail level, priority rules, and output structure.'
+    description: 'Control task scope, language, detail level, priority rules, and output structure.',
+    zhDescription: '控制任务范围、语言、细节级别、优先级规则和输出结构。'
   },
   {
     label: 'Smart tips',
+    zhLabel: '智能提醒',
     value: 'generation.smart_tip_generation',
-    description: 'Control suggestion style, planning focus, and reminder strictness.'
+    description: 'Control suggestion style, planning focus, and reminder strictness.',
+    zhDescription: '控制建议风格、规划重点和提醒严格度。'
   },
   {
     label: 'Daily report',
+    zhLabel: '每日报告',
     value: 'generation.generation_report',
-    description: 'Control report scope, summarization granularity, and future-task handling.'
+    description: 'Control report scope, summarization granularity, and future-task handling.',
+    zhDescription: '控制报告范围、摘要粒度和未来任务处理。'
   },
   {
     label: 'Daily report merge',
+    zhLabel: '每日报告合并',
     value: 'generation.merge_hourly_reports',
-    description: 'Control how hourly summaries are combined into the final daily report.'
+    description: 'Control how hourly summaries are combined into the final daily report.',
+    zhDescription: '控制每小时摘要如何合并为最终日报。'
   },
   {
     label: 'Activity monitor',
+    zhLabel: '活动监控',
     value: 'generation.realtime_activity_monitor',
-    description: 'Control real-time activity title and summary style.'
+    description: 'Control real-time activity title and summary style.',
+    zhDescription: '控制实时活动标题和摘要风格。'
   }
 ]
 
@@ -297,7 +321,9 @@ type FeatureModelAssignmentKey = GenerationIntervalKey | 'report'
 interface GenerationIntervalOption {
   key: GenerationIntervalKey
   label: string
+  zhLabel: string
   description: string
+  zhDescription: string
   fallbackInterval: number
   minInterval: number
 }
@@ -311,21 +337,27 @@ const GENERATION_INTERVAL_OPTIONS: GenerationIntervalOption[] = [
   {
     key: 'activity',
     label: 'Activity summaries',
+    zhLabel: '活动摘要',
     description: 'Generate concise activity records from recent screen context.',
+    zhDescription: '根据最近的屏幕上下文生成简洁的活动记录。',
     fallbackInterval: 900,
     minInterval: 600
   },
   {
     key: 'tips',
     label: 'Smart tips',
+    zhLabel: '智能提醒',
     description: 'Generate planning suggestions and reminders.',
+    zhDescription: '生成规划建议和提醒。',
     fallbackInterval: 3600,
     minInterval: 1800
   },
   {
     key: 'todos',
     label: 'Todos',
+    zhLabel: '待办',
     description: 'Extract suggested tasks from recent activity.',
+    zhDescription: '从最近活动中提取建议任务。',
     fallbackInterval: 1800,
     minInterval: 1800
   }
@@ -464,6 +496,7 @@ const getGenerationIntervalConfig = (
 
 const Settings: FC<SettingsProps> = (props) => {
   const { closeSetting, init } = props
+  const t = useLocalizedText()
 
   const [form] = Form.useForm<SettingsFormProps>()
   const [launchOnBoot, setLaunchOnBoot] = useState(false)
@@ -504,7 +537,7 @@ const Settings: FC<SettingsProps> = (props) => {
   const { run: updateModelSettings, loading: updateLoading } = useRequest(updateModelSettingsAPI, {
     manual: true,
     onSuccess() {
-      Message.success('Your API key saved successfully')
+      Message.success(t('Your API key saved successfully', 'API Key 已保存'))
       getInfo()
       getProfiles()
       if (init) {
@@ -512,13 +545,13 @@ const Settings: FC<SettingsProps> = (props) => {
       }
     },
     onError(e: Error) {
-      const errMsg = get(e, 'response.data.message') || get(e, 'message') || 'Failed to save settings'
+      const errMsg = get(e, 'response.data.message') || get(e, 'message') || t('Failed to save settings', '保存设置失败')
       Message.error(errMsg)
     }
   })
   const getValidationMessage = (error: any) => {
     if (!error) {
-      return 'Please complete the required model settings'
+      return t('Please complete the required model settings', '请完成必填模型设置')
     }
     if (typeof error === 'string') {
       return error
@@ -529,9 +562,9 @@ const Settings: FC<SettingsProps> = (props) => {
 
     const firstFieldError = Object.values(error)[0] as any
     if (Array.isArray(firstFieldError)) {
-      return firstFieldError[0]?.message || firstFieldError[0] || 'Please complete the required model settings'
+      return firstFieldError[0]?.message || firstFieldError[0] || t('Please complete the required model settings', '请完成必填模型设置')
     }
-    return firstFieldError?.message || 'Please complete the required model settings'
+    return firstFieldError?.message || t('Please complete the required model settings', '请完成必填模型设置')
   }
 
   const setFormFromConfig = useMemoizedFn((config: ModelConfigProps) => {
@@ -560,15 +593,15 @@ const Settings: FC<SettingsProps> = (props) => {
 
   const deleteSelectedProfile = useMemoizedFn(async () => {
     if (!selectedProfileName) return
-    if (!window.confirm(`Delete saved model profile "${selectedProfileName}"?`)) return
+    if (!window.confirm(t('Delete saved model profile', '删除已保存的模型配置') + ` "${selectedProfileName}"?`)) return
 
     try {
       await deleteModelProfileAPI(selectedProfileName)
-      Message.success('Model profile deleted')
+      Message.success(t('Model profile deleted', '模型配置已删除'))
       setSelectedProfileName(undefined)
       getProfiles()
     } catch (error: any) {
-      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to delete profile')
+      Message.error(get(error, 'response.data.message') || get(error, 'message') || t('Failed to delete profile', '删除配置失败'))
     }
   })
 
@@ -576,9 +609,9 @@ const Settings: FC<SettingsProps> = (props) => {
     try {
       await form.validate()
       const values = form.getFieldsValue()
-      const isCustom = values.modelPlatform === ModelTypeList.Custom
+      const isManualConfig = values.modelPlatform === ModelTypeList.Custom || values.modelPlatform === ModelTypeList.Zhipu
       if (!values.modelPlatform) {
-        Message.error('Please select Model Platform')
+        Message.error(t('Please select Model Platform', '请选择模型平台'))
         return
       }
       const commonKey = [
@@ -588,17 +621,19 @@ const Settings: FC<SettingsProps> = (props) => {
         `${values.modelPlatform}-baseUrl`,
         `${values.modelPlatform}-embeddingModelId`,
         `${values.modelPlatform}-embeddingBaseUrl`,
-        `${values.modelPlatform}-embeddingApiKey`
+        `${values.modelPlatform}-embeddingApiKey`,
+        `${values.modelPlatform}-embeddingModelPlatform`
       ]
       const data = pick(values, commonKey)
       const formatData = Object.fromEntries(
         Object.entries(data).map(([key, value]) => [key.replace(`${values.modelPlatform}-`, ''), value])
       )
-      const params = isCustom
+      const params = isManualConfig
         ? formatData
         : {
             ...formatData,
             baseUrl: values.modelPlatform === ModelTypeList.Doubao ? BaseUrl.DoubaoUrl : BaseUrl.OpenAIUrl,
+            embeddingModelPlatform: values.modelPlatform,
             embeddingModelId:
               values.modelPlatform === ModelTypeList.Doubao
                 ? embeddingModels.DoubaoEmbeddingModelId
@@ -617,13 +652,13 @@ const Settings: FC<SettingsProps> = (props) => {
 
   const modelProfileOptions = useMemo(() => {
     return [
-      { label: 'Default model', value: '' },
+      { label: t('Default model', '默认模型'), value: '' },
       ...modelProfiles.map((profile) => ({
         label: profile.name,
         value: profile.name
       }))
     ]
-  }, [modelProfiles])
+  }, [modelProfiles, t])
 
   const updateFeatureModelAssignment = useMemoizedFn((key: FeatureModelAssignmentKey, profileName: string) => {
     const assignmentKey = getFeatureModelAssignmentKey(key)
@@ -657,7 +692,9 @@ const Settings: FC<SettingsProps> = (props) => {
       setPrompts(stripNonPromptTopLevelKeys(loadedPrompts))
       setPromptModelAssignments(assignments.prompts || {})
     } catch (error: any) {
-      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to load system prompts')
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to load system prompts', '加载系统提示词失败')
+      )
     } finally {
       setPromptLoading(false)
     }
@@ -675,9 +712,11 @@ const Settings: FC<SettingsProps> = (props) => {
       await updatePromptModelAssignmentsAPI({ prompts: nextPromptAssignments })
       setPrompts(nextPrompts)
       setPromptModelAssignments(nextPromptAssignments)
-      Message.success('System prompt saved')
+      Message.success(t('System prompt saved', '系统提示词已保存'))
     } catch (error: any) {
-      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to save system prompt')
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to save system prompt', '保存系统提示词失败')
+      )
     } finally {
       setPromptSaving(false)
     }
@@ -691,7 +730,7 @@ const Settings: FC<SettingsProps> = (props) => {
       setFeatureModelAssignments(assignments.features || {})
     } catch (error: any) {
       Message.error(
-        get(error, 'response.data.message') || get(error, 'message') || 'Failed to load content generation settings'
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to load content generation settings', '加载内容生成设置失败')
       )
     } finally {
       setContentGenerationLoading(false)
@@ -710,10 +749,10 @@ const Settings: FC<SettingsProps> = (props) => {
       await updateFeatureModelAssignmentsAPI({ features: nextFeatureAssignments })
       setContentGenerationSettings(nextSettings)
       setFeatureModelAssignments(nextFeatureAssignments)
-      Message.success('Content generation settings saved')
+      Message.success(t('Content generation settings saved', '内容生成设置已保存'))
     } catch (error: any) {
       Message.error(
-        get(error, 'response.data.message') || get(error, 'message') || 'Failed to save content generation settings'
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to save content generation settings', '保存内容生成设置失败')
       )
     } finally {
       setContentGenerationSaving(false)
@@ -727,7 +766,9 @@ const Settings: FC<SettingsProps> = (props) => {
       setPromptLanguage(language)
       await window.api.setLanguage(language)
     } catch (error: any) {
-      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to load language setting')
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to load language setting', '加载语言设置失败')
+      )
     } finally {
       setPromptLanguageLoading(false)
     }
@@ -744,9 +785,15 @@ const Settings: FC<SettingsProps> = (props) => {
       await window.api.setLanguage(language)
       setPromptLanguage(language)
       await loadPrompts()
-      Message.success(`Language switched to ${language === 'zh' ? 'Chinese' : 'English'}`)
+      Message.success(
+        language === 'zh'
+          ? t('Language switched to Chinese', '语言已切换为中文')
+          : t('Language switched to English', '语言已切换为英文')
+      )
     } catch (error: any) {
-      Message.error(get(error, 'response.data.message') || get(error, 'message') || 'Failed to update language setting')
+      Message.error(
+        get(error, 'response.data.message') || get(error, 'message') || t('Failed to update language setting', '更新语言设置失败')
+      )
     } finally {
       setPromptLanguageLoading(false)
     }
@@ -832,11 +879,11 @@ const Settings: FC<SettingsProps> = (props) => {
       setAvailableUpdateVersion(info?.version)
       setUpdateDownloaded(true)
       setUpdateDownloading(false)
-      Message.success(`Update ${info?.version || ''} downloaded. Restart to install.`)
+      Message.success(t('Update downloaded. Restart to install.', '更新已下载，请重启安装。'))
     })
     const removeUpdateErrorListener = ipcRenderer.on(IpcChannel.UpdateError, (_event, error) => {
       setUpdateDownloading(false)
-      Message.error(get(error, 'message') || 'Failed to check for updates')
+      Message.error(get(error, 'message') || t('Failed to check for updates', '检查更新失败'))
     })
 
     return () => {
@@ -845,7 +892,7 @@ const Settings: FC<SettingsProps> = (props) => {
       removeUpdateDownloadedListener()
       removeUpdateErrorListener()
     }
-  }, [])
+  }, [t])
 
   const handleLaunchOnBootChange = useMemoizedFn(async (checked: boolean) => {
     setLaunchOnBootLoading(true)
@@ -853,7 +900,7 @@ const Settings: FC<SettingsProps> = (props) => {
       await window.api.setLaunchOnBoot(checked)
       setLaunchOnBoot(checked)
     } catch (error) {
-      Message.error('Failed to update launch on boot setting')
+      Message.error(t('Failed to update launch on boot setting', '更新开机启动设置失败'))
     } finally {
       setLaunchOnBootLoading(false)
     }
@@ -865,7 +912,7 @@ const Settings: FC<SettingsProps> = (props) => {
       const theme = await window.api.setTheme(mode)
       setThemeMode(theme.mode)
     } catch (error) {
-      Message.error('Failed to update theme setting')
+      Message.error(t('Failed to update theme setting', '更新主题设置失败'))
     } finally {
       setThemeLoading(false)
     }
@@ -885,14 +932,14 @@ const Settings: FC<SettingsProps> = (props) => {
       if (nextUpdateVersion) {
         setAvailableUpdateVersion(nextUpdateVersion)
         setUpdateDownloading(true)
-        Message.info(`Update ${nextUpdateVersion} found. Downloading...`)
+        Message.info(t('Update found. Downloading...', '发现更新，正在下载...'))
       } else {
         setAvailableUpdateVersion(undefined)
         setUpdateDownloading(false)
-        Message.success(`MineContext is up to date (${result?.currentVersion || 'current version'})`)
+        Message.success(t('MineContext is up to date', 'MineContext 已是最新版本'))
       }
     } catch (error: any) {
-      Message.error(get(error, 'message') || 'Failed to check for updates')
+      Message.error(get(error, 'message') || t('Failed to check for updates', '检查更新失败'))
     } finally {
       setUpdateChecking(false)
     }
@@ -904,7 +951,7 @@ const Settings: FC<SettingsProps> = (props) => {
 
   const handleSelectScreenshotDirectory = useMemoizedFn(async () => {
     const selectedDirectory = await window.api.selectPath({
-      title: 'Select screenshot directory',
+      title: t('Select screenshot directory', '选择截图目录'),
       properties: ['openDirectory', 'createDirectory']
     })
     if (selectedDirectory) {
@@ -917,7 +964,7 @@ const Settings: FC<SettingsProps> = (props) => {
 
   const handleSaveRuntimeSettings = useMemoizedFn(async () => {
     if (runtimeSettings.proxyMode === 'custom' && !runtimeSettings.proxyUrl.trim()) {
-      Message.error('Enter a proxy server URL')
+      Message.error(t('Enter a proxy server URL', '请输入代理服务器地址'))
       return
     }
 
@@ -925,12 +972,15 @@ const Settings: FC<SettingsProps> = (props) => {
     try {
       const nextSettings = await window.api.setRuntimeSettings(runtimeSettings)
       setRuntimeSettings(nextSettings)
-      Message.success('App settings saved')
+      Message.success(t('App settings saved', '应用设置已保存'))
       if (currentBackendPort && nextSettings.backendStartPort !== currentBackendPort) {
-        Message.info(`Backend port changes take effect after app restart. Current port: ${currentBackendPort}`)
+        Message.info(
+          t('Backend port changes take effect after app restart. Current port:', '后端端口更改会在应用重启后生效。当前端口：') +
+            ` ${currentBackendPort}`
+        )
       }
     } catch (error: any) {
-      Message.error(get(error, 'message') || 'Failed to save local storage settings')
+      Message.error(get(error, 'message') || t('Failed to save local storage settings', '保存本地存储设置失败'))
     } finally {
       setRuntimeSettingsSaving(false)
     }
@@ -958,10 +1008,13 @@ const Settings: FC<SettingsProps> = (props) => {
         <div className="bg-[var(--mc-surface)] rounded-[16px] pl-6 flex flex-col h-full overflow-y-auto overflow-x-hidden scrollbar-hide pb-2">
           <div className="mb-[12px]">
             <div className="mt-[26px] mb-[10px] text-[24px] font-bold text-[var(--mc-text-primary)]">
-              Select a AI model to start
+              {t('Select a AI model to start', '选择一个 AI 模型开始')}
             </div>
             <Text type="secondary" className="text-[13px]">
-              Configure AI model and API Key, then you can start MineContext’s intelligent context capability
+              {t(
+                'Configure AI model and API Key, then you can start MineContext’s intelligent context capability',
+                '配置 AI 模型和 API Key 后，即可使用 MineContext 的智能上下文能力'
+              )}
             </Text>
           </div>
 
@@ -969,9 +1022,11 @@ const Settings: FC<SettingsProps> = (props) => {
             {!init && (
               <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
                 <div>
-                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Launch at login</div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                    {t('Launch at login', '登录时启动')}
+                  </div>
                   <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                    Start MineContext automatically when you sign in.
+                    {t('Start MineContext automatically when you sign in.', '登录系统时自动启动 MineContext。')}
                   </div>
                 </div>
                 <Switch checked={launchOnBoot} loading={launchOnBootLoading} onChange={handleLaunchOnBootChange} />
@@ -980,9 +1035,11 @@ const Settings: FC<SettingsProps> = (props) => {
             {!init && (
               <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
                 <div>
-                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Appearance</div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                    {t('Appearance', '外观')}
+                  </div>
                   <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                    Follow the OS theme or choose a fixed app theme.
+                    {t('Follow the OS theme or choose a fixed app theme.', '跟随系统主题，或选择固定的应用主题。')}
                   </div>
                 </div>
                 <Spin loading={themeLoading}>
@@ -990,9 +1047,9 @@ const Settings: FC<SettingsProps> = (props) => {
                     type="button"
                     value={themeMode}
                     onChange={(value) => handleThemeModeChange(value as ThemeMode)}>
-                    <Radio value="system">System</Radio>
-                    <Radio value="light">Light</Radio>
-                    <Radio value="dark">Dark</Radio>
+                    <Radio value="system">{t('System', '系统')}</Radio>
+                    <Radio value="light">{t('Light', '浅色')}</Radio>
+                    <Radio value="dark">{t('Dark', '深色')}</Radio>
                   </Radio.Group>
                 </Spin>
               </div>
@@ -1000,9 +1057,11 @@ const Settings: FC<SettingsProps> = (props) => {
             {!init && (
               <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
                 <div>
-                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Language</div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                    {t('Language', '语言')}
+                  </div>
                   <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                    Keep prompts and the tray menu in the same language.
+                    {t('Keep prompts and the tray menu in the same language.', '保持提示词和托盘菜单使用同一种语言。')}
                   </div>
                 </div>
                 <Spin loading={promptLanguageLoading}>
@@ -1019,18 +1078,20 @@ const Settings: FC<SettingsProps> = (props) => {
             {!init && (
               <div className="mb-6 flex w-[574px] items-center justify-between border-b border-[var(--mc-border)] pb-4">
                 <div>
-                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">App updates</div>
+                  <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                    {t('App updates', '应用更新')}
+                  </div>
                   <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
                     {availableUpdateVersion
                       ? updateDownloaded
-                        ? `Version ${availableUpdateVersion} is ready to install.`
-                        : `Version ${availableUpdateVersion} is downloading.`
-                      : 'Check for the latest MineContext release.'}
+                        ? t('Version', '版本') + ` ${availableUpdateVersion} ` + t('is ready to install.', '已准备好安装。')
+                        : t('Version', '版本') + ` ${availableUpdateVersion} ` + t('is downloading.', '正在下载。')
+                      : t('Check for the latest MineContext release.', '检查最新 MineContext 版本。')}
                   </div>
                 </div>
                 {updateDownloaded ? (
                   <Button type="primary" icon={<IconPoweroff />} onClick={handleInstallUpdate}>
-                    Restart
+                    {t('Restart', '重启')}
                   </Button>
                 ) : (
                   <Button
@@ -1038,7 +1099,7 @@ const Settings: FC<SettingsProps> = (props) => {
                     loading={updateChecking || updateDownloading}
                     disabled={updateDownloading}
                     onClick={handleCheckForUpdates}>
-                    {updateDownloading ? 'Downloading' : 'Check'}
+                    {updateDownloading ? t('Downloading', '下载中') : t('Check', '检查')}
                   </Button>
                 )}
               </div>
@@ -1047,9 +1108,14 @@ const Settings: FC<SettingsProps> = (props) => {
               <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Network proxy</div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                      {t('Network proxy', '网络代理')}
+                    </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      Choose direct, system, or custom proxy routing for app network requests.
+                      {t(
+                        'Choose direct, system, or custom proxy routing for app network requests.',
+                        '为应用网络请求选择直连、系统代理或自定义代理。'
+                      )}
                     </div>
                   </div>
                   <Button
@@ -1058,7 +1124,7 @@ const Settings: FC<SettingsProps> = (props) => {
                     icon={<IconSave />}
                     loading={runtimeSettingsSaving}
                     onClick={handleSaveRuntimeSettings}>
-                    Save
+                    {t('Save', '保存')}
                   </Button>
                 </div>
                 <div className="mb-3">
@@ -1071,16 +1137,16 @@ const Settings: FC<SettingsProps> = (props) => {
                         proxyMode: value as AppProxyMode
                       }))
                     }>
-                    <Radio value="system">System</Radio>
-                    <Radio value="direct">Direct</Radio>
-                    <Radio value="custom">Custom</Radio>
+                    <Radio value="system">{t('System', '系统')}</Radio>
+                    <Radio value="direct">{t('Direct', '直连')}</Radio>
+                    <Radio value="custom">{t('Custom', '自定义')}</Radio>
                   </Radio.Group>
                 </div>
                 {runtimeSettings.proxyMode === 'custom' && (
                   <>
                     <div className="mb-3">
                       <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
-                        Proxy server
+                        {t('Proxy server', '代理服务器')}
                       </div>
                       <Input
                         value={runtimeSettings.proxyUrl}
@@ -1096,7 +1162,7 @@ const Settings: FC<SettingsProps> = (props) => {
                     </div>
                     <div>
                       <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
-                        Bypass hosts
+                        {t('Bypass hosts', '绕过主机')}
                       </div>
                       <Input
                         value={runtimeSettings.proxyBypassRules}
@@ -1113,7 +1179,7 @@ const Settings: FC<SettingsProps> = (props) => {
                   </>
                 )}
                 <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                  Proxy changes apply immediately after saving.
+                  {t('Proxy changes apply immediately after saving.', '代理更改会在保存后立即生效。')}
                 </div>
               </div>
             )}
@@ -1121,9 +1187,11 @@ const Settings: FC<SettingsProps> = (props) => {
               <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Content generation</div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                      {t('Content generation', '内容生成')}
+                    </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      Set generation intervals and the daily report time.
+                      {t('Set generation intervals and the daily report time.', '设置生成间隔和每日报告时间。')}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -1132,7 +1200,7 @@ const Settings: FC<SettingsProps> = (props) => {
                       icon={<IconRefresh />}
                       loading={contentGenerationLoading}
                       onClick={loadContentGenerationSettings}>
-                      Reload
+                      {t('Reload', '重新加载')}
                     </Button>
                     <Button
                       size="small"
@@ -1141,7 +1209,7 @@ const Settings: FC<SettingsProps> = (props) => {
                       loading={contentGenerationSaving}
                       disabled={contentGenerationLoading}
                       onClick={handleSaveContentGenerationSettings}>
-                      Save
+                      {t('Save', '保存')}
                     </Button>
                   </div>
                 </div>
@@ -1155,10 +1223,10 @@ const Settings: FC<SettingsProps> = (props) => {
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
-                                {option.label}
+                                {t(option.label, option.zhLabel)}
                               </div>
                               <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                                {option.description}
+                                {t(option.description, option.zhDescription)}
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-3">
@@ -1171,8 +1239,8 @@ const Settings: FC<SettingsProps> = (props) => {
                                       approval_mode: value as TodoApprovalMode
                                     })
                                   }>
-                                  <Radio value="review">Review</Radio>
-                                  <Radio value="auto_add">Auto add</Radio>
+                                  <Radio value="review">{t('Review', '审核')}</Radio>
+                                  <Radio value="auto_add">{t('Auto add', '自动添加')}</Radio>
                                 </Radio.Group>
                               )}
                               <Switch
@@ -1194,7 +1262,9 @@ const Settings: FC<SettingsProps> = (props) => {
                             </div>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-3">
-                            <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                            <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                              {t('Model', '模型')}
+                            </div>
                             <Select
                               value={featureModelAssignments[assignmentKey] || ''}
                               options={modelProfileOptions}
@@ -1208,9 +1278,11 @@ const Settings: FC<SettingsProps> = (props) => {
                     <div>
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Daily report</div>
+                          <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                            {t('Daily report', '每日报告')}
+                          </div>
                           <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                            Generate one summary report at this local time.
+                            {t('Generate one summary report at this local time.', '在这个本地时间生成一份摘要报告。')}
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
@@ -1227,7 +1299,9 @@ const Settings: FC<SettingsProps> = (props) => {
                         </div>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                        <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                          {t('Model', '模型')}
+                        </div>
                         <Select
                           value={featureModelAssignments[getFeatureModelAssignmentKey('report')] || ''}
                           options={modelProfileOptions}
@@ -1244,9 +1318,14 @@ const Settings: FC<SettingsProps> = (props) => {
               <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">Local storage</div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                      {t('Local storage', '本地存储')}
+                    </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      Choose where screenshots are saved and which backend port MineContext tries first.
+                      {t(
+                        'Choose where screenshots are saved and which backend port MineContext tries first.',
+                        '选择截图保存位置，以及 MineContext 优先尝试的后端端口。'
+                      )}
                     </div>
                   </div>
                   <Button
@@ -1255,13 +1334,13 @@ const Settings: FC<SettingsProps> = (props) => {
                     icon={<IconSave />}
                     loading={runtimeSettingsSaving}
                     onClick={handleSaveRuntimeSettings}>
-                    Save
+                    {t('Save', '保存')}
                   </Button>
                 </div>
                 <div className="mb-3 flex items-center gap-2">
                   <Input
                     value={runtimeSettings.screenshotDirectory}
-                    placeholder="Default screenshot directory"
+                    placeholder={t('Default screenshot directory', '默认截图目录')}
                     allowClear
                     onChange={(value) =>
                       setRuntimeSettings((settings) => ({
@@ -1272,7 +1351,7 @@ const Settings: FC<SettingsProps> = (props) => {
                     className="flex-1"
                   />
                   <Button icon={<IconFolder />} onClick={handleSelectScreenshotDirectory}>
-                    Browse
+                    {t('Browse', '浏览')}
                   </Button>
                   <Button
                     icon={<IconRefresh />}
@@ -1282,14 +1361,19 @@ const Settings: FC<SettingsProps> = (props) => {
                         screenshotDirectory: ''
                       }))
                     }>
-                    Default
+                    {t('Default', '默认')}
                   </Button>
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">Backend start port</div>
+                    <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                      {t('Backend start port', '后端启动端口')}
+                    </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      MineContext will use this port first, then scan upward if it is occupied.
+                      {t(
+                        'MineContext will use this port first, then scan upward if it is occupied.',
+                        'MineContext 会优先使用此端口；若被占用，则向上扫描可用端口。'
+                      )}
                     </div>
                   </div>
                   <InputNumber
@@ -1309,10 +1393,13 @@ const Settings: FC<SettingsProps> = (props) => {
                 <div className="mt-4 flex items-center justify-between gap-4">
                   <div>
                     <div className="text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
-                      Keep raw screenshot files
+                      {t('Keep raw screenshot files', '保留原始截图文件')}
                     </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      Turn off to keep only semantic summaries and vectors after processing.
+                      {t(
+                        'Turn off to keep only semantic summaries and vectors after processing.',
+                        '关闭后，处理完成只保留语义摘要和向量。'
+                      )}
                     </div>
                   </div>
                   <Switch
@@ -1327,12 +1414,13 @@ const Settings: FC<SettingsProps> = (props) => {
                 </div>
                 {currentBackendPort && runtimeSettings.backendStartPort !== currentBackendPort && (
                   <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                    Current backend port: {currentBackendPort}. Port changes apply after app restart.
+                    {t('Current backend port:', '当前后端端口：')} {currentBackendPort}.{' '}
+                    {t('Port changes apply after app restart.', '端口更改会在应用重启后生效。')}
                   </div>
                 )}
                 {!runtimeSettings.retainScreenshotImages && (
                   <div className="mt-2 text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                    Raw screenshot retention changes apply after app restart.
+                    {t('Raw screenshot retention changes apply after app restart.', '原始截图保留设置会在应用重启后生效。')}
                   </div>
                 )}
               </div>
@@ -1341,14 +1429,19 @@ const Settings: FC<SettingsProps> = (props) => {
               <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">System prompts</div>
+                    <div className="text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
+                      {t('System prompts', '系统提示词')}
+                    </div>
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      Tune generated todos, reminders, reports, and activity summaries.
+                      {t(
+                        'Tune generated todos, reminders, reports, and activity summaries.',
+                        '调整待办、提醒、报告和活动摘要的生成方式。'
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Button size="small" icon={<IconRefresh />} loading={promptLoading} onClick={loadPrompts}>
-                      Reload
+                      {t('Reload', '重新加载')}
                     </Button>
                     <Button
                       size="small"
@@ -1356,7 +1449,7 @@ const Settings: FC<SettingsProps> = (props) => {
                       icon={<IconSave />}
                       loading={promptSaving}
                       onClick={handleSavePrompt}>
-                      Save
+                      {t('Save', '保存')}
                     </Button>
                   </div>
                 </div>
@@ -1365,17 +1458,19 @@ const Settings: FC<SettingsProps> = (props) => {
                     <Select
                       value={selectedPromptPath}
                       options={PROMPT_CATEGORY_OPTIONS.map((option) => ({
-                        label: option.label,
+                        label: t(option.label, option.zhLabel),
                         value: option.value
                       }))}
                       onChange={(value) => setSelectedPromptPath(value as string)}
                       className="!w-full"
                     />
                     <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
-                      {selectedPromptCategory.description}
+                      {t(selectedPromptCategory.description, selectedPromptCategory.zhDescription)}
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">Model</div>
+                      <div className="text-[12px] leading-[18px] text-[var(--mc-text-secondary)]">
+                        {t('Model', '模型')}
+                      </div>
                       <Select
                         value={promptModelAssignments[selectedPromptPath] || ''}
                         options={modelProfileOptions}
@@ -1385,11 +1480,13 @@ const Settings: FC<SettingsProps> = (props) => {
                     </div>
                   </div>
                   <div className="mb-3">
-                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">System prompt</div>
+                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                      {t('System prompt', '系统提示词')}
+                    </div>
                     <Input.TextArea
                       value={promptDraft.system}
                       autoSize={{ minRows: 5, maxRows: 12 }}
-                      placeholder="System prompt"
+                      placeholder={t('System prompt', '系统提示词')}
                       onChange={(value) =>
                         setPromptDraft((draft) => ({
                           ...draft,
@@ -1399,11 +1496,13 @@ const Settings: FC<SettingsProps> = (props) => {
                     />
                   </div>
                   <div>
-                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">User prompt</div>
+                    <div className="mb-1 text-[13px] leading-[18px] text-[var(--mc-text-primary)]">
+                      {t('User prompt', '用户提示词')}
+                    </div>
                     <Input.TextArea
                       value={promptDraft.user}
                       autoSize={{ minRows: 4, maxRows: 10 }}
-                      placeholder="User prompt"
+                      placeholder={t('User prompt', '用户提示词')}
                       onChange={(value) =>
                         setPromptDraft((draft) => ({
                           ...draft,
@@ -1418,11 +1517,11 @@ const Settings: FC<SettingsProps> = (props) => {
             {!init && modelProfiles.length > 0 && (
               <div className="mb-6 w-[574px] border-b border-[var(--mc-border)] pb-4">
                 <div className="mb-2 text-[14px] leading-[20px] text-[var(--mc-text-primary)]">
-                  Saved model profiles
+                  {t('Saved model profiles', '已保存的模型配置')}
                 </div>
                 <div className="flex gap-2">
                   <Select
-                    placeholder="Switch to a previously saved model"
+                    placeholder={t('Switch to a previously saved model', '切换到已保存的模型')}
                     value={selectedProfileName}
                     options={modelProfiles.map((profile) => ({
                       value: profile.name,
@@ -1432,7 +1531,7 @@ const Settings: FC<SettingsProps> = (props) => {
                     className="flex-1"
                   />
                   <Button disabled={!selectedProfileName} onClick={deleteSelectedProfile}>
-                    Delete
+                    {t('Delete', '删除')}
                   </Button>
                 </div>
               </div>
@@ -1444,9 +1543,12 @@ const Settings: FC<SettingsProps> = (props) => {
               initialValues={{
                 modelPlatform: ModelTypeList.Doubao,
                 [`${ModelTypeList.Doubao}-modelId`]: 'doubao-seed-1-6-flash-250828',
-                [`${ModelTypeList.OpenAI}-modelId`]: 'gpt-5-nano'
+                [`${ModelTypeList.OpenAI}-modelId`]: 'gpt-5-nano',
+                [`${ModelTypeList.Zhipu}-modelId`]: 'glm-4.1v-thinking-flash',
+                [`${ModelTypeList.Zhipu}-baseUrl`]: BaseUrl.ZhipuUrl,
+                [`${ModelTypeList.Zhipu}-embeddingModelPlatform`]: ModelTypeList.Custom
               }}>
-              <FormItem label="Model platform" field={'modelPlatform'} requiredSymbol={false}>
+              <FormItem label={t('Model platform', '模型平台')} field={'modelPlatform'} requiredSymbol={false}>
                 <ModelRadio />
               </FormItem>
               <FormItem
@@ -1456,6 +1558,8 @@ const Settings: FC<SettingsProps> = (props) => {
                   const modelPlatform = values.modelPlatform
                   if (modelPlatform === ModelTypeList.Custom) {
                     return <CustomFormItems prefix={ModelTypeList.Custom} />
+                  } else if (modelPlatform === ModelTypeList.Zhipu) {
+                    return <CustomFormItems prefix={ModelTypeList.Zhipu} />
                   } else if (modelPlatform === ModelTypeList.Doubao) {
                     return <StandardFormItems modelPlatform={modelPlatform} prefix={ModelTypeList.Doubao} />
                   } else if (modelPlatform === ModelTypeList.OpenAI) {
@@ -1472,7 +1576,7 @@ const Settings: FC<SettingsProps> = (props) => {
                 onClick={submit}
                 disabled={updateLoading}
                 className="!bg-[var(--mc-primary-button-bg)] !text-[var(--mc-primary-button-text)]">
-                {init ? 'Get started' : 'Save'}
+                {init ? t('Get started', '开始使用') : t('Save', '保存')}
               </Button>
             </Spin>
           </div>

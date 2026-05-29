@@ -9,7 +9,7 @@ interface ModelRadioProps {
 
 const ModelRadio = ({ value, onChange }: ModelRadioProps) => {
   return (
-    <div className="w-[100px] flex items-center justify-between gap-[16px]">
+    <div className="flex items-center justify-between gap-[16px]">
       {ModelInfoList?.map((item) => {
         return (
           <div className="w-10  cursor-pointer">
