@@ -17,7 +17,7 @@ class ThemeLanguageStaticTest(unittest.TestCase):
         runtime_settings = RUNTIME_SETTINGS.read_text(encoding="utf-8")
 
         self.assertIn("export type ThemeMode = 'system' | 'light' | 'dark'", theme_types)
-        self.assertIn("value=\"dark\">Dark</Radio>", settings_page)
+        self.assertIn("value=\"dark\">{t('Dark', '深色')}</Radio>", settings_page)
         self.assertIn("value=\"zh\">中文</Radio>", settings_page)
         self.assertIn("export type AppLanguage = 'system' | 'en' | 'zh'", runtime_settings)
         self.assertIn("resolveAppLanguage", runtime_settings)

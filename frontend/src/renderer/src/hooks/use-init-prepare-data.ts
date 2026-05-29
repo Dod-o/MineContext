@@ -6,37 +6,89 @@ import { TaskUrgency } from '@renderer/constant/feed'
 import { useMount, useRequest } from 'ahooks'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
-const TODOList = [
-  {
-    id: -3, // Auto-incrementing ID (simulated value)
-    content:
-      'Click 【Start with Tutorial】 in the 【Creation】 to jump into the tutorial and master the features and usage of MineContext.',
-    created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    urgency: TaskUrgency.High, // 1=Urgent
-    start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    end_time: dayjs().format('YYYY-MM-DD 23:59:59'),
-    assignee: 'system'
+import { resolveAppLanguage } from '@shared/app-runtime-settings'
+
+type SupportedLanguage = 'en' | 'zh'
+
+const INITIAL_TODO_TEXT: Record<number, Record<SupportedLanguage, string>> = {
+  [-3]: {
+    en: 'Click 【Start with Tutorial】 in the 【Creation】 to jump into the tutorial and master the features and usage of MineContext.',
+    zh: '点击【创作】中的【从教程开始】，进入教程并掌握 MineContext 的功能和使用方法。'
   },
-  {
-    id: -2,
-    content:
-      'Enter the 【Settings】 in 【Screen Monitor】 to set your screen sharing area, and click 【Start Recording】 to begin.',
-    created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    urgency: TaskUrgency.High, // 0=Normal
-    start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    end_time: dayjs().format('YYYY-MM-DD 23:59:59'),
-    assignee: 'system'
+  [-2]: {
+    en: 'Enter the 【Settings】 in 【Screen Monitor】 to set your screen sharing area, and click 【Start Recording】 to begin.',
+    zh: '进入【屏幕记录】中的【设置】，选择要共享的屏幕区域，然后点击【开始记录】。'
   },
-  {
-    id: -4,
-    content: 'Click 【Chat with AI】 in the upper right corner of the screen to experience the AI partner Q&A.',
-    created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'), // Due before the end of work today
-    urgency: TaskUrgency.High, // 2=Very Urgent
-    start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    end_time: dayjs().format('YYYY-MM-DD 23:59:59'),
-    assignee: 'system'
+  [-4]: {
+    en: 'Click 【Chat with AI】 in the upper right corner of the screen to experience the AI partner Q&A.',
+    zh: '点击屏幕右上角的【与 AI 聊天】，体验 AI 伙伴问答。'
   }
-]
+}
+
+async function getRuntimeLanguage(): Promise<SupportedLanguage> {
+  try {
+    const settings = await window.api.getRuntimeSettings()
+    return resolveAppLanguage(settings.language, navigator.language)
+  } catch {
+    return resolveAppLanguage('system', navigator.language)
+  }
+}
+
+function buildInitialTodoList(language: SupportedLanguage): TODOActivity[] {
+  const now = dayjs()
+  const createdAt = now.format('YYYY-MM-DD HH:mm:ss')
+  const endTime = now.format('YYYY-MM-DD 23:59:59')
+
+  return [
+    {
+      id: -3,
+      content: INITIAL_TODO_TEXT[-3][language],
+      created_at: createdAt,
+      urgency: TaskUrgency.High,
+      start_time: createdAt,
+      end_time: endTime,
+      assignee: 'system',
+      status: 0
+    },
+    {
+      id: -2,
+      content: INITIAL_TODO_TEXT[-2][language],
+      created_at: createdAt,
+      urgency: TaskUrgency.High,
+      start_time: createdAt,
+      end_time: endTime,
+      assignee: 'system',
+      status: 0
+    },
+    {
+      id: -4,
+      content: INITIAL_TODO_TEXT[-4][language],
+      created_at: createdAt,
+      urgency: TaskUrgency.High,
+      start_time: createdAt,
+      end_time: endTime,
+      assignee: 'system',
+      status: 0
+    }
+  ]
+}
+
+function localizeInitialTodoList(todoList: TODOActivity[], language: SupportedLanguage): TODOActivity[] {
+  return todoList.map((item) => {
+    const text = INITIAL_TODO_TEXT[item.id]
+    if (!text || item.assignee !== 'system') {
+      return item
+    }
+    if (item.content !== text.en && item.content !== text.zh) {
+      return item
+    }
+    return {
+      ...item,
+      content: text[language]
+    }
+  })
+}
+
 const useInitPrepareData = () => {
   const [todoList, setTodoList] = useState<TODOActivity[]>([])
   const { run, loading, data } = useRequest<TODOActivity[], any>(
@@ -50,11 +102,17 @@ const useInitPrepareData = () => {
       // await window.screenMonitorAPI.clearSettings('todoList')
 
       const res = await window.screenMonitorAPI.getSettings<TODOActivity[]>('todoList')
+      const language = await getRuntimeLanguage()
       if (!res || !Array.isArray(res)) {
-        await window.screenMonitorAPI.setSettings('todoList', TODOList)
-        return TODOList as TODOActivity[]
+        const initialTodoList = buildInitialTodoList(language)
+        await window.screenMonitorAPI.setSettings('todoList', initialTodoList)
+        return initialTodoList
       }
-      return res
+      const localizedTodoList = localizeInitialTodoList(res, language)
+      if (JSON.stringify(localizedTodoList) !== JSON.stringify(res)) {
+        await window.screenMonitorAPI.setSettings('todoList', localizedTodoList)
+      }
+      return localizedTodoList
     },
     { manual: true }
   )
