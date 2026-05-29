@@ -43,13 +43,13 @@ class ConfigurableScreenshotStorageStaticTest(unittest.TestCase):
         page = SETTINGS_PAGE.read_text(encoding="utf-8")
 
         self.assertIn("const handleSelectScreenshotDirectory = useMemoizedFn(async () => {", page)
-        self.assertIn("title: 'Select screenshot directory'", page)
+        self.assertIn("title: t('Select screenshot directory'", page)
         self.assertIn("properties: ['openDirectory', 'createDirectory']", page)
         self.assertIn("value={runtimeSettings.screenshotDirectory}", page)
-        self.assertIn("placeholder=\"Default screenshot directory\"", page)
+        self.assertIn("placeholder={t('Default screenshot directory'", page)
         self.assertIn("screenshotDirectory: selectedDirectory", page)
         self.assertIn("screenshotDirectory: ''", page)
-        self.assertIn("App settings saved", page)
+        self.assertIn("Message.success(t('App settings saved'", page)
 
 
 if __name__ == "__main__":

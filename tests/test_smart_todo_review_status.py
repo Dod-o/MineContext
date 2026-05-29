@@ -6,31 +6,37 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 
-def _install_fake_dependencies():
-    for package_name in [
-        "opencontext.config",
-        "opencontext.context_consumption",
-        "opencontext.context_consumption.generation",
-        "opencontext.llm",
-        "opencontext.models",
-        "opencontext.storage",
-        "opencontext.utils",
-    ]:
-        package = sys.modules.setdefault(package_name, types.ModuleType(package_name))
-        package.__path__ = []
+_PATCHED_MODULES = {}
 
+
+def _install_fake_module(name, module):
+    if name not in _PATCHED_MODULES:
+        _PATCHED_MODULES[name] = sys.modules.get(name)
+    sys.modules[name] = module
+
+
+def _restore_fake_modules():
+    for name, original in reversed(_PATCHED_MODULES.items()):
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+
+
+def _install_fake_dependencies():
     fake_config = types.ModuleType("opencontext.config.global_config")
     fake_config.get_config = lambda _path=None: {}
     fake_config.get_prompt_group = lambda _: {"system": "", "user": ""}
-    sys.modules[fake_config.__name__] = fake_config
+    _install_fake_module(fake_config.__name__, fake_config)
 
     fake_debug = types.ModuleType("opencontext.context_consumption.generation.debug_helper")
     fake_debug.DebugHelper = type("DebugHelper", (), {"save_generation_debug": staticmethod(lambda **_: None)})
-    sys.modules[fake_debug.__name__] = fake_debug
+    _install_fake_module(fake_debug.__name__, fake_debug)
 
     fake_vlm = types.ModuleType("opencontext.llm.global_vlm_client")
     fake_vlm.generate_with_messages = lambda *_args, **_kwargs: "[]"
-    sys.modules[fake_vlm.__name__] = fake_vlm
+    fake_vlm.get_prompt_model_profile = lambda *_args, **_kwargs: None
+    _install_fake_module(fake_vlm.__name__, fake_vlm)
 
     fake_models = types.ModuleType("opencontext.models.context")
 
@@ -42,19 +48,19 @@ def _install_fake_dependencies():
 
     fake_models.ContextType = _ContextType
     fake_models.Vectorize = type("Vectorize", (), {"__init__": lambda self, text=None: setattr(self, "text", text)})
-    sys.modules[fake_models.__name__] = fake_models
+    _install_fake_module(fake_models.__name__, fake_models)
 
     fake_storage = types.ModuleType("opencontext.storage.global_storage")
     fake_storage.get_storage = lambda: None
-    sys.modules[fake_storage.__name__] = fake_storage
+    _install_fake_module(fake_storage.__name__, fake_storage)
 
     fake_json = types.ModuleType("opencontext.utils.json_parser")
     fake_json.parse_json_from_response = lambda _: []
-    sys.modules[fake_json.__name__] = fake_json
+    _install_fake_module(fake_json.__name__, fake_json)
 
     fake_logging = types.ModuleType("opencontext.utils.logging_utils")
     fake_logging.get_logger = lambda _: Mock()
-    sys.modules[fake_logging.__name__] = fake_logging
+    _install_fake_module(fake_logging.__name__, fake_logging)
 
 
 _install_fake_dependencies()
@@ -70,6 +76,7 @@ spec = importlib.util.spec_from_file_location("smart_todo_manager_for_test", mod
 smart_todo_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(smart_todo_module)
+_restore_fake_modules()
 
 
 class SmartTodoReviewStatusTest(unittest.TestCase):

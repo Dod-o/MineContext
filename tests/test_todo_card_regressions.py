@@ -32,7 +32,8 @@ class TodoCardRegressionTest(unittest.TestCase):
         self.assertIn("const handleDeleteSelectedTasks", source)
         self.assertIn("const handleToggleBatchMode", source)
         self.assertIn("IconSelectAll", source)
-        self.assertIn("{isBatchMode ? 'Cancel' : 'Batch'}", source)
+        self.assertIn("{isBatchMode ? t('Cancel'", source)
+        self.assertIn(": t('Batch'", source)
         self.assertIn("selectedVisibleTaskIds.length === 0", source)
 
     def test_generated_todo_review_queue_has_bulk_actions(self):
@@ -41,9 +42,9 @@ class TodoCardRegressionTest(unittest.TestCase):
         self.assertIn("TaskStatus.Review", source)
         self.assertIn("handleConfirmAllGeneratedTasks", source)
         self.assertIn("handleDeleteAllGeneratedTasks", source)
-        self.assertIn(">Suggested</Text>", source)
-        self.assertIn("Add all", source)
-        self.assertIn("Delete all", source)
+        self.assertIn("{t('Suggested'", source)
+        self.assertIn("t('Add all'", source)
+        self.assertIn("t('Delete all'", source)
 
 
 if __name__ == "__main__":

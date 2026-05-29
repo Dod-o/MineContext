@@ -39,8 +39,8 @@ class TodoApprovalModeStaticTest(unittest.TestCase):
         self.assertIn("approval_mode: 'review'", page)
         self.assertIn("normalizeTodoApprovalMode", page)
         self.assertIn("approval_mode: value as TodoApprovalMode", page)
-        self.assertIn('<Radio value="review">Review</Radio>', page)
-        self.assertIn('<Radio value="auto_add">Auto add</Radio>', page)
+        self.assertIn('<Radio value="review">{t(\'Review\'', page)
+        self.assertIn('<Radio value="auto_add">{t(\'Auto add\'', page)
 
     def test_web_settings_page_preserves_todo_approval_mode(self):
         html = WEB_SETTINGS_HTML.read_text(encoding="utf-8")

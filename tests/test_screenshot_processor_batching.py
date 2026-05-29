@@ -9,13 +9,21 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-fake_processing_pkg = types.ModuleType("opencontext.context_processing")
-fake_processing_pkg.__path__ = []
-sys.modules.setdefault("opencontext.context_processing", fake_processing_pkg)
+_PATCHED_MODULES = {}
 
-fake_processor_pkg = types.ModuleType("opencontext.context_processing.processor")
-fake_processor_pkg.__path__ = []
-sys.modules.setdefault("opencontext.context_processing.processor", fake_processor_pkg)
+
+def _install_fake_module(name, module):
+    if name not in _PATCHED_MODULES:
+        _PATCHED_MODULES[name] = sys.modules.get(name)
+    sys.modules[name] = module
+
+
+def _restore_fake_modules():
+    for name, original in reversed(_PATCHED_MODULES.items()):
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
 
 fake_base_processor = types.ModuleType("opencontext.context_processing.processor.base_processor")
 fake_base_processor.BaseContextProcessor = type(
@@ -23,40 +31,32 @@ fake_base_processor.BaseContextProcessor = type(
     (),
     {"__init__": lambda self, config=None: setattr(self, "config", config or {})},
 )
-sys.modules.setdefault(fake_base_processor.__name__, fake_base_processor)
+_install_fake_module(fake_base_processor.__name__, fake_base_processor)
 
 fake_entity_processor = types.ModuleType("opencontext.context_processing.processor.entity_processor")
 fake_entity_processor.refresh_entities = None
 fake_entity_processor.validate_and_clean_entities = lambda entities: entities
-sys.modules.setdefault(fake_entity_processor.__name__, fake_entity_processor)
-
-fake_llm_pkg = types.ModuleType("opencontext.llm")
-fake_llm_pkg.__path__ = []
-sys.modules.setdefault("opencontext.llm", fake_llm_pkg)
+_install_fake_module(fake_entity_processor.__name__, fake_entity_processor)
 
 fake_embedding_client = types.ModuleType("opencontext.llm.global_embedding_client")
 fake_embedding_client.do_vectorize_async = None
-sys.modules.setdefault(fake_embedding_client.__name__, fake_embedding_client)
+_install_fake_module(fake_embedding_client.__name__, fake_embedding_client)
 
 fake_vlm_client = types.ModuleType("opencontext.llm.global_vlm_client")
 fake_vlm_client.generate_with_messages_async = None
-sys.modules.setdefault(fake_vlm_client.__name__, fake_vlm_client)
+_install_fake_module(fake_vlm_client.__name__, fake_vlm_client)
 
 fake_storage = types.ModuleType("opencontext.storage.global_storage")
 fake_storage.get_storage = lambda: None
-sys.modules.setdefault(fake_storage.__name__, fake_storage)
-
-fake_tools_pkg = types.ModuleType("opencontext.tools")
-fake_tools_pkg.__path__ = []
-sys.modules.setdefault("opencontext.tools", fake_tools_pkg)
+_install_fake_module(fake_storage.__name__, fake_storage)
 
 fake_tool_definitions = types.ModuleType("opencontext.tools.tool_definitions")
 fake_tool_definitions.ALL_TOOL_DEFINITIONS = []
-sys.modules.setdefault(fake_tool_definitions.__name__, fake_tool_definitions)
+_install_fake_module(fake_tool_definitions.__name__, fake_tool_definitions)
 
 fake_json_parser = types.ModuleType("opencontext.utils.json_parser")
 fake_json_parser.parse_json_from_response = lambda response: {}
-sys.modules.setdefault(fake_json_parser.__name__, fake_json_parser)
+_install_fake_module(fake_json_parser.__name__, fake_json_parser)
 
 module_path = (
     Path(__file__).resolve().parents[1]
@@ -69,6 +69,7 @@ spec = importlib.util.spec_from_file_location("screenshot_processor_for_test", m
 screenshot_processor_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(screenshot_processor_module)
+_restore_fake_modules()
 ScreenshotProcessor = screenshot_processor_module.ScreenshotProcessor
 ContentFormat = screenshot_processor_module.ContentFormat
 ContextProperties = screenshot_processor_module.ContextProperties

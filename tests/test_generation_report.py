@@ -7,10 +7,28 @@ import types
 import unittest
 
 
+_PATCHED_MODULES = {}
+
+
+def _install_fake_module(name, module):
+    if name not in _PATCHED_MODULES:
+        _PATCHED_MODULES[name] = sys.modules.get(name)
+    sys.modules[name] = module
+
+
+def _restore_fake_modules():
+    for name, original in reversed(_PATCHED_MODULES.items()):
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+
+
 fake_vlm_client = types.ModuleType("opencontext.llm.global_vlm_client")
 fake_vlm_client.generate_with_messages_async = None
 fake_vlm_client.generate_with_messages = None
-sys.modules.setdefault("opencontext.llm.global_vlm_client", fake_vlm_client)
+fake_vlm_client.get_prompt_model_profile = lambda *_args, **_kwargs: None
+_install_fake_module("opencontext.llm.global_vlm_client", fake_vlm_client)
 
 fake_debug_helper = types.ModuleType("opencontext.context_consumption.generation.debug_helper")
 
@@ -24,11 +42,11 @@ class _FakeDebugHelper:
 
 
 fake_debug_helper.DebugHelper = _FakeDebugHelper
-sys.modules.setdefault("opencontext.context_consumption.generation.debug_helper", fake_debug_helper)
+_install_fake_module("opencontext.context_consumption.generation.debug_helper", fake_debug_helper)
 
 fake_tool_definitions = types.ModuleType("opencontext.tools.tool_definitions")
 fake_tool_definitions.ALL_TOOL_DEFINITIONS = []
-sys.modules.setdefault("opencontext.tools.tool_definitions", fake_tool_definitions)
+_install_fake_module("opencontext.tools.tool_definitions", fake_tool_definitions)
 
 fake_tools_executor = types.ModuleType("opencontext.tools.tools_executor")
 
@@ -38,7 +56,7 @@ class _FakeToolsExecutor:
 
 
 fake_tools_executor.ToolsExecutor = _FakeToolsExecutor
-sys.modules.setdefault("opencontext.tools.tools_executor", fake_tools_executor)
+_install_fake_module("opencontext.tools.tools_executor", fake_tools_executor)
 
 module_path = (
     Path(__file__).resolve().parents[1]
@@ -51,6 +69,7 @@ spec = importlib.util.spec_from_file_location("generation_report_for_test", modu
 generation_report_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(generation_report_module)
+_restore_fake_modules()
 ReportGenerator = generation_report_module.ReportGenerator
 NO_ACTIVITY_REPORT = generation_report_module.NO_ACTIVITY_REPORT
 
@@ -177,7 +196,7 @@ class ReportGeneratorTest(unittest.TestCase):
                     }
                 ]
 
-        async def fake_generate_with_messages_async(_messages):
+        async def fake_generate_with_messages_async(_messages, **_kwargs):
             return "# Activity Report\n\n## Overview\nReport body"
 
         generator = _TimelineReportGenerator.__new__(_TimelineReportGenerator)

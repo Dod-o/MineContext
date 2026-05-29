@@ -6,21 +6,35 @@ import unittest
 from pathlib import Path
 
 
+_PATCHED_MODULES = {}
+
+
+def _install_fake_module(name, module):
+    if name not in _PATCHED_MODULES:
+        _PATCHED_MODULES[name] = sys.modules.get(name)
+    sys.modules[name] = module
+
+
+def _restore_fake_modules():
+    for name, original in reversed(_PATCHED_MODULES.items()):
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+
+
 fake_chromadb = types.ModuleType("chromadb")
 fake_chromadb.Client = type("Client", (), {})
 fake_chromadb.Collection = type("Collection", (), {})
 fake_chromadb.HttpClient = lambda *args, **kwargs: None
 fake_chromadb.PersistentClient = lambda *args, **kwargs: None
 fake_chromadb.Settings = lambda **kwargs: kwargs
-sys.modules.setdefault("chromadb", fake_chromadb)
-
-fake_llm_pkg = types.ModuleType("opencontext.llm")
-fake_llm_pkg.__path__ = []
-sys.modules.setdefault("opencontext.llm", fake_llm_pkg)
+_install_fake_module("chromadb", fake_chromadb)
 
 fake_embedding_client = types.ModuleType("opencontext.llm.global_embedding_client")
 fake_embedding_client.do_vectorize = lambda vectorize: None
-sys.modules.setdefault(fake_embedding_client.__name__, fake_embedding_client)
+fake_embedding_client.do_vectorize_async = None
+_install_fake_module(fake_embedding_client.__name__, fake_embedding_client)
 
 module_path = (
     Path(__file__).resolve().parents[1]
@@ -33,6 +47,7 @@ spec = importlib.util.spec_from_file_location("chromadb_backend_for_test", modul
 chromadb_backend_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(chromadb_backend_module)
+_restore_fake_modules()
 ChromaDBBackend = chromadb_backend_module.ChromaDBBackend
 
 

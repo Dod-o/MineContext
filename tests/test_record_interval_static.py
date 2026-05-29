@@ -46,7 +46,7 @@ class RecordIntervalStaticTest(unittest.TestCase):
         self.assertIn("recordInterval: tempRecordInterval", page)
         self.assertIn("setRecordInterval(nextSettings.recordInterval)", page)
         self.assertIn("await window.screenMonitorAPI.updateModelConfig(nextSettings)", page)
-        self.assertIn("label=\"Record Interval\"", modal)
+        self.assertIn("label={t('Record Interval'", modal)
         self.assertIn("min={5}", modal)
         self.assertIn("max={300}", modal)
         self.assertIn("formatTooltip={(value) => `${value}s`}", modal)

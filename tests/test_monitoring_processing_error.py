@@ -13,7 +13,7 @@ from opencontext.monitoring.monitor import Monitor
 class MonitoringProcessingErrorTest(unittest.TestCase):
     def test_legacy_error_msg_keyword_is_accepted(self):
         monitor = Monitor()
-        timestamp = datetime(2026, 5, 28, 10, 0)
+        timestamp = datetime.now()
 
         monitor.record_processing_error(
             error_msg="record_processing_error legacy keyword",

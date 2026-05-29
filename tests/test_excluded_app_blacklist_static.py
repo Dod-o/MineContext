@@ -49,7 +49,7 @@ class ExcludedAppBlacklistStaticTest(unittest.TestCase):
         self.assertIn("setExcludedAppPatterns(nextSettings.excludedAppPatterns)", page)
         self.assertIn("function parseExcludedAppPatterns(value: string): string[]", modal)
         self.assertIn(".split(/[\\n,]/)", modal)
-        self.assertIn('label="Excluded applications"', modal)
+        self.assertIn("label={t('Excluded applications'", modal)
         self.assertIn("onSetTempExcludedAppPatterns(parseExcludedAppPatterns(value))", modal)
         self.assertIn("private isSourceExcluded(source: CaptureSource): boolean", task)
         self.assertIn("if (source.type !== 'window')", task)

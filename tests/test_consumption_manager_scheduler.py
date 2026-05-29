@@ -7,9 +7,26 @@ import sys
 from datetime import datetime
 
 
+_PATCHED_MODULES = {}
+
+
+def _install_fake_module(name, module):
+    if name not in _PATCHED_MODULES:
+        _PATCHED_MODULES[name] = sys.modules.get(name)
+    sys.modules[name] = module
+
+
+def _restore_fake_modules():
+    for name, original in reversed(_PATCHED_MODULES.items()):
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+
+
 fake_generation_pkg = types.ModuleType("opencontext.context_consumption.generation")
 fake_generation_pkg.__path__ = []
-sys.modules.setdefault("opencontext.context_consumption.generation", fake_generation_pkg)
+_install_fake_module("opencontext.context_consumption.generation", fake_generation_pkg)
 
 for module_name, class_name in {
     "generation_report": "ReportGenerator",
@@ -19,13 +36,14 @@ for module_name, class_name in {
 }.items():
     fake_module = types.ModuleType(f"opencontext.context_consumption.generation.{module_name}")
     fake_module.__dict__[class_name] = type(class_name, (), {})
-    sys.modules.setdefault(fake_module.__name__, fake_module)
+    _install_fake_module(fake_module.__name__, fake_module)
 
 module_path = Path(__file__).resolve().parents[1] / "opencontext" / "managers" / "consumption_manager.py"
 spec = importlib.util.spec_from_file_location("consumption_manager_for_test", module_path)
 consumption_manager_module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(consumption_manager_module)
+_restore_fake_modules()
 ConsumptionManager = consumption_manager_module.ConsumptionManager
 
 
